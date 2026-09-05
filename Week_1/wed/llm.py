@@ -5,7 +5,6 @@ import os
 import queue
 import sys
 import threading
-from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
@@ -15,6 +14,10 @@ import httpx
 PROMPT_ENGINEER_SYSTEM = (
     "Ты — специалист по проектированию промптов. Создавай точные, "
     "самодостаточные промпты для решения задач, но не решай сами задачи."
+)
+SOLUTION_OUTPUT_INSTRUCTION = (
+    "Дай развёрнутое решение. В конце ответа обязательно добавь раздел "
+    "«Краткий вывод» и сформулируй в нём итог в 1–3 предложениях."
 )
 _END_OF_INPUT = object()
 
@@ -105,6 +108,15 @@ class LlmResult:
     usage: Dict[str, Any]
 
 
+@dataclass(frozen=True)
+class ProfileExecution:
+    profile: PromptProfile
+    solution_prompt: str
+    answer: LlmResult
+    prompt_request: Optional[str] = None
+    prompt_result: Optional[LlmResult] = None
+
+
 PROFILES = {
     "1": PromptProfile("1", "Прямой ответ без дополнительных инструкций"),
     "2": PromptProfile("2", "Решение с инструкцией «решай пошагово»"),
@@ -158,8 +170,9 @@ def build_prompt_generation_request(task: str) -> str:
         "Составь эффективный промпт для другой языковой модели, которая "
         "должна решить приведённую ниже задачу. Промпт должен полностью "
         "сохранять условие задачи, требовать обоснованное решение, проверку "
-        "результата и чёткий итоговый ответ. Верни только готовый промпт без "
-        "пояснений и не решай задачу самостоятельно.\n\n"
+        "результата, развёрнутый ответ и раздел «Краткий вывод» с итогом в "
+        "1–3 предложениях. Верни только готовый промпт без пояснений и не "
+        "решай задачу самостоятельно.\n\n"
         f"Задача:\n{task}"
     )
 
@@ -174,8 +187,10 @@ def build_experts_prompt(task: str) -> str:
         "решения и проверяет вычисления.\n"
         "3. Критик — независимо решает задачу, ищет ошибки и рассматривает "
         "граничные случаи.\n\n"
-        "Сначала выведи отдельное решение каждого эксперта под заголовками "
-        "«Аналитик», «Инженер» и «Критик». Затем добавь общий вывод с итоговым "
+        "Выведи развёрнутое решение каждого эксперта под заголовками "
+        "«Аналитик», «Инженер» и «Критик». В конце раздела каждого эксперта "
+        "добавь подраздел «Краткий вывод эксперта» с итогом в 1–3 "
+        "предложениях. Затем добавь общий раздел «Краткий вывод» с итоговым "
         "ответом группы.\n\n"
         f"Задача:\n{task}"
     )
@@ -185,13 +200,22 @@ def build_payload(
     user_prompt: str,
     config: Config,
     system_prompt: Optional[str] = None,
+    solution_request: bool = True,
 ) -> Dict[str, Any]:
+    effective_system_prompt = (
+        system_prompt if system_prompt is not None else config.system_prompt
+    )
+    if solution_request:
+        effective_system_prompt = (
+            f"{effective_system_prompt}\n\n{SOLUTION_OUTPUT_INSTRUCTION}"
+        )
+
     payload: Dict[str, Any] = {
         "model": config.model,
         "messages": [
             {
                 "role": "system",
-                "content": system_prompt or config.system_prompt,
+                "content": effective_system_prompt,
             },
             {"role": "user", "content": user_prompt},
         ],
@@ -201,58 +225,25 @@ def build_payload(
     return payload
 
 
-async def post_with_cancellation(
+async def send_request(
     user_prompt: str,
     config: Config,
-    console: ConsoleInput,
+    client: httpx.AsyncClient,
     system_prompt: Optional[str] = None,
-) -> httpx.Response:
-    timeout = httpx.Timeout(config.timeout_seconds)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        request_task = asyncio.create_task(
-            client.post(
-                config.api_url,
-                headers={
-                    "Authorization": f"Bearer {config.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=build_payload(user_prompt, config, system_prompt),
-            )
-        )
-
-        try:
-            while True:
-                console_value = console.poll()
-                if console_value == "0":
-                    raise RequestCancelled("Запрос отменён пользователем")
-                if console_value is not None:
-                    print(
-                        "Для отмены текущего запроса введите 0 и нажмите Enter."
-                    )
-                if request_task.done():
-                    return await request_task
-                await asyncio.sleep(0.1)
-        finally:
-            if not request_task.done():
-                request_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await request_task
-
-
-def ask_llm(
-    user_prompt: str,
-    config: Config,
-    console: ConsoleInput,
-    system_prompt: Optional[str] = None,
+    solution_request: bool = True,
 ) -> LlmResult:
-    print("Ожидание ответа: введите 0 и нажмите Enter, чтобы отменить запрос.")
-    response = asyncio.run(
-        post_with_cancellation(
+    response = await client.post(
+        config.api_url,
+        headers={
+            "Authorization": f"Bearer {config.api_key}",
+            "Content-Type": "application/json",
+        },
+        json=build_payload(
             user_prompt,
             config,
-            console,
             system_prompt,
-        )
+            solution_request,
+        ),
     )
 
     if not response.is_success:
@@ -269,6 +260,100 @@ def ask_llm(
         finish_reason=choice.get("finish_reason", "unknown"),
         usage=result.get("usage") or {},
     )
+
+
+async def execute_profile(
+    profile: PromptProfile,
+    task: str,
+    config: Config,
+    client: httpx.AsyncClient,
+) -> ProfileExecution:
+    prompt_request: Optional[str] = None
+    prompt_result: Optional[LlmResult] = None
+
+    if profile.key == "1":
+        solution_prompt = task
+    elif profile.key == "2":
+        solution_prompt = build_step_by_step_prompt(task)
+    elif profile.key == "3":
+        prompt_request = build_prompt_generation_request(task)
+        prompt_result = await send_request(
+            prompt_request,
+            config,
+            client,
+            system_prompt=PROMPT_ENGINEER_SYSTEM,
+            solution_request=False,
+        )
+        solution_prompt = prompt_result.content.strip()
+        if not solution_prompt:
+            raise RuntimeError("Модель вернула пустой промпт для решения задачи")
+    elif profile.key == "4":
+        solution_prompt = build_experts_prompt(task)
+    else:
+        raise RuntimeError(f"Неизвестный профиль: {profile.key}")
+
+    answer = await send_request(solution_prompt, config, client)
+    return ProfileExecution(
+        profile=profile,
+        solution_prompt=solution_prompt,
+        answer=answer,
+        prompt_request=prompt_request,
+        prompt_result=prompt_result,
+    )
+
+
+async def execute_profiles_async(
+    profiles: list[PromptProfile],
+    task: str,
+    config: Config,
+    console: ConsoleInput,
+) -> list[Any]:
+    timeout = httpx.Timeout(config.timeout_seconds)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        profile_tasks = [
+            asyncio.create_task(execute_profile(profile, task, config, client))
+            for profile in profiles
+        ]
+
+        try:
+            while True:
+                console_value = console.poll()
+                if console_value == "0":
+                    raise RequestCancelled("Запросы отменены пользователем")
+                if console_value is not None:
+                    print(
+                        "Для отмены текущих запросов введите 0 и нажмите Enter."
+                    )
+                if all(profile_task.done() for profile_task in profile_tasks):
+                    return list(
+                        await asyncio.gather(
+                            *profile_tasks,
+                            return_exceptions=True,
+                        )
+                    )
+                await asyncio.sleep(0.1)
+        finally:
+            for profile_task in profile_tasks:
+                if not profile_task.done():
+                    profile_task.cancel()
+            await asyncio.gather(*profile_tasks, return_exceptions=True)
+
+
+def execute_profiles(
+    profiles: list[PromptProfile],
+    task: str,
+    config: Config,
+    console: ConsoleInput,
+) -> list[Any]:
+    if len(profiles) > 1:
+        print(
+            "Четыре способа запущены параллельно. В способе 3 второй запрос "
+            "начнётся после генерации промпта."
+        )
+    else:
+        print("Запрос запущен.")
+    print("Во время ожидания введите 0 и нажмите Enter, чтобы отменить.")
+    return asyncio.run(execute_profiles_async(profiles, task, config, console))
 
 
 def format_api_error(response: httpx.Response, fallback_url: str) -> str:
@@ -308,44 +393,27 @@ def print_result(result: LlmResult) -> None:
         )
 
 
-def run_profile(
-    profile: PromptProfile,
-    task: str,
-    config: Config,
-    console: ConsoleInput,
+def print_profile_execution(
+    execution: ProfileExecution,
 ) -> None:
+    profile = execution.profile
     print(f"\n=== {profile.title} ===")
 
-    if profile.key == "1":
-        solution_prompt = task
-    elif profile.key == "2":
-        solution_prompt = build_step_by_step_prompt(task)
-    elif profile.key == "3":
-        prompt_request = build_prompt_generation_request(task)
+    if (
+        execution.prompt_request is not None
+        and execution.prompt_result is not None
+    ):
         print("\n--- Шаг 1: генерация промпта ---")
         print("Запрос к генератору промпта:")
-        print(prompt_request)
+        print(execution.prompt_request)
         print("\nСгенерированный промпт:")
-        prompt_result = ask_llm(
-            prompt_request,
-            config,
-            console,
-            system_prompt=PROMPT_ENGINEER_SYSTEM,
-        )
-        solution_prompt = prompt_result.content.strip()
-        if not solution_prompt:
-            raise RuntimeError("Модель вернула пустой промпт для решения задачи")
-        print_result(prompt_result)
+        print_result(execution.prompt_result)
         print("\n--- Шаг 2: решение по сгенерированному промпту ---")
-    elif profile.key == "4":
-        solution_prompt = build_experts_prompt(task)
-    else:
-        raise RuntimeError(f"Неизвестный профиль: {profile.key}")
 
     print("Промпт для решения:")
-    print(solution_prompt)
+    print(execution.solution_prompt)
     print("\nОтвет:")
-    print_result(ask_llm(solution_prompt, config, console))
+    print_result(execution.answer)
 
 
 def normalize_console_input(value: str) -> str:
@@ -400,6 +468,7 @@ def main() -> None:
     print(f"API: {config.api_url}")
     print(f"Температура: {config.temperature}")
     print(f"Таймаут одного API-вызова: {config.timeout_seconds} с")
+    print("Формат решений: развёрнутый ответ и краткий вывод в конце")
 
     while True:
         choice = choose_menu_option(console)
@@ -414,23 +483,24 @@ def main() -> None:
             task = read_task(console, previous_task)
         previous_task = task
 
-        for profile in profiles_for_choice(choice):
-            try:
-                run_profile(profile, task, config, console)
-            except RequestCancelled:
-                print("\nТекущий запрос отменён. Возврат в меню.")
-                break
-            except (
-                RuntimeError,
-                httpx.RequestError,
-                ValueError,
-                KeyError,
-                IndexError,
-            ) as error:
+        profiles = profiles_for_choice(choice)
+        try:
+            executions = execute_profiles(profiles, task, config, console)
+        except RequestCancelled:
+            print("\nТекущие запросы отменены. Возврат в меню.")
+            continue
+        except (httpx.RequestError, ValueError) as error:
+            print(f"\nОшибка выполнения запросов: {error}", file=sys.stderr)
+            continue
+
+        for profile, execution in zip(profiles, executions):
+            if isinstance(execution, BaseException):
                 print(
-                    f"\nОшибка для способа «{profile.title}»: {error}",
+                    f"\nОшибка для способа «{profile.title}»: {execution}",
                     file=sys.stderr,
                 )
+                continue
+            print_profile_execution(execution)
 
 
 if __name__ == "__main__":
