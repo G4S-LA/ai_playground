@@ -14,8 +14,10 @@ OpenAI-compatible Chat Completions API с разным уровнем контр
 6. автоматическое сравнение ответа без ограничений и ответа со всеми
    ограничениями.
 
-Во всех режимах сохраняются одна модель, один пользовательский запрос и одна
-температура. Меняются только инструкции и параметры управления ответом.
+Во всех режимах сохраняются одна модель, один пользовательский запрос, одна
+температура и один режим рассуждений. Для моделей Alibaba Model Studio thinking
+по умолчанию выключен во всех пунктах меню. Меняются только инструкции и
+параметры управления видимым ответом.
 
 ## Установка
 
@@ -189,7 +191,7 @@ LLM_TOKEN_LIMIT_PARAMETER=max_tokens
 `sentences`, затем установить `completion_status` в `completed` и закрыть JSON.
 Значение поля закреплено через `enum` в JSON Schema.
 
-## Использование с Qwen
+## Использование с Qwen и другими моделями Model Studio
 
 Alibaba Cloud Model Studio предоставляет OpenAI-compatible Chat Completions
 API. Пример настроек находится в `.env.qwen.example`; в URL нужно заменить
@@ -205,14 +207,33 @@ API. Пример настроек находится в `.env.qwen.example`; в
 - `max_tokens` как устаревающий вариант для старых моделей;
 - `stop` со строкой или массивом строк.
 
-Для строгого режима в примере выбрана модель `qwen3.7-plus`. При использовании
-структурированного вывода скрипт по умолчанию передаёт Qwen дополнительный
-параметр `enable_thinking=false`, поскольку JSON-режим некоторых Qwen-моделей
-несовместим с thinking mode. Это можно отключить:
+Для строгого режима в примере выбрана модель `qwen3.7-plus`. Для гибридных
+thinking-моделей Alibaba Model Studio, включая Qwen и DeepSeek V4, скрипт по
+умолчанию передаёт `enable_thinking=false` **во всех пунктах меню**, включая
+профиль «Без ограничений». Это постоянная настройка эксперимента, а не одно из
+сравниваемых ограничений: благодаря ей токены не расходуются целиком на
+`reasoning_content`, а между запросами меняются только средства контроля
+видимого ответа. Скрипт явно печатает состояние thinking mode перед меню и рядом
+с каждым результатом.
+
+Настройку можно отменить:
 
 ```text
-QWEN_DISABLE_THINKING_FOR_STRUCTURED=false
+MODEL_STUDIO_DISABLE_THINKING=false
 ```
+
+Например, у `deepseek-v4-flash-0731` thinking mode включён по умолчанию. Без
+`enable_thinking=false` маленький лимит может полностью израсходоваться на
+`reasoning_content`, оставив поле `content` пустым.
+
+`enable_thinking` — расширение Alibaba Model Studio, а не универсальный параметр
+OpenAI-compatible API. Поэтому скрипт не отправляет его в OpenAI и неизвестным
+провайдерам: такой сервер может отклонить весь запрос. У reasoning-моделей
+OpenAI используется параметр `reasoning_effort`, но значение полного отключения
+зависит от конкретной модели и поддерживается не всеми моделями. Для чистого
+сравнения с OpenAI в примере оставлена `gpt-4o-mini`, у которой нет отдельного
+thinking mode. Если выбрать другую reasoning-модель или другого провайдера,
+нужно отдельно проверить его способ отключения рассуждений.
 
 Пример использует endpoint региона EU. В регионе Singapore строгий JSON Schema
 на момент написания не поддерживается. Набор совместимых моделей и регионов
@@ -238,6 +259,7 @@ JSON и выводит `finish_reason`.
 
 - [Qwen OpenAI-compatible Chat Completions](https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions)
 - [Qwen Structured Output](https://www.alibabacloud.com/help/en/model-studio/qwen-structured-output)
+- [DeepSeek в Alibaba Model Studio](https://www.alibabacloud.com/help/en/model-studio/deepseek-api)
 - [OpenAI Chat Completions](https://developers.openai.com/api/reference/cli/resources/chat/subresources/completions/methods/create)
 
 ## Переменные окружения
@@ -247,7 +269,7 @@ JSON и выводит `finish_reason`.
 | `LLM_API_KEY` | Ключ API | обязательное |
 | `LLM_API_URL` | URL Chat Completions | OpenAI |
 | `LLM_MODEL` | Модель | `gpt-4o-mini` |
-| `LLM_PROVIDER` | `openai`, `qwen` или `auto` | `auto` |
+| `LLM_PROVIDER` | `openai`, `qwen`, `deepseek`, `model_studio` или `auto` | `auto` |
 | `LLM_RESPONSE_FORMAT` | `json_schema` или `json_object` | `json_schema` |
 | `LLM_TOKEN_LIMIT_PARAMETER` | Имя параметра лимита | `max_completion_tokens` |
 | `LLM_MAX_COMPLETION_TOKENS` | Жёсткий предел ответа | `180` |
@@ -255,3 +277,4 @@ JSON и выводит `finish_reason`.
 | `LLM_MAX_SENTENCES` | Мягкое ограничение предложений | `3` |
 | `LLM_STOP_SEQUENCE` | Строка остановки | `.` |
 | `LLM_TEMPERATURE` | Случайность генерации | `0.2` |
+| `MODEL_STUDIO_DISABLE_THINKING` | Отключить thinking во всех режимах Alibaba Model Studio | `true` |

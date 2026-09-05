@@ -23,7 +23,7 @@ class Config:
     max_sentences: int
     temperature: float
     stop_sequence: str
-    qwen_disable_thinking_for_structured: bool
+    model_studio_disable_thinking: bool
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -74,19 +74,19 @@ class Config:
             max_sentences=_positive_int("LLM_MAX_SENTENCES", 3),
             temperature=_float_in_range("LLM_TEMPERATURE", 0.2, 0.0, 2.0),
             stop_sequence=os.getenv("LLM_STOP_SEQUENCE", "."),
-            qwen_disable_thinking_for_structured=_boolean(
-                "QWEN_DISABLE_THINKING_FOR_STRUCTURED", True
+            model_studio_disable_thinking=_boolean(
+                "MODEL_STUDIO_DISABLE_THINKING", True
             ),
         )
 
     @property
-    def is_qwen(self) -> bool:
-        if self.provider == "qwen":
-            return True
-        if self.provider != "auto":
-            return False
+    def is_model_studio(self) -> bool:
         url = self.api_url.lower()
-        return "aliyuncs.com" in url or "dashscope" in url
+        return (
+            self.provider in {"qwen", "deepseek", "model_studio", "alibaba"}
+            or "aliyuncs.com" in url
+            or "dashscope" in url
+        )
 
 
 @dataclass(frozen=True)
@@ -279,8 +279,9 @@ def build_payload(
 
     if profile.structured:
         payload["response_format"] = build_response_format(profile, config)
-        if config.is_qwen and config.qwen_disable_thinking_for_structured:
-            payload["enable_thinking"] = False
+
+    if should_disable_thinking(config):
+        payload["enable_thinking"] = False
 
     if profile.length_limited:
         payload[config.token_limit_parameter] = config.max_completion_tokens
@@ -289,6 +290,18 @@ def build_payload(
         payload["stop"] = [config.stop_sequence]
 
     return payload
+
+
+def should_disable_thinking(config: Config) -> bool:
+    return config.is_model_studio and config.model_studio_disable_thinking
+
+
+def describe_thinking_mode(config: Config) -> str:
+    if should_disable_thinking(config):
+        return "выключен во всех режимах (enable_thinking=false)"
+    if config.is_model_studio:
+        return "не изменяется скриптом"
+    return "отдельно не управляется этим API-параметром"
 
 
 def ask_llm(
@@ -385,6 +398,7 @@ def print_result(
 ) -> None:
     print(f"\n=== {profile.title} ===")
     print(f"Ограничения: {describe_controls(profile, config)}")
+    print(f"Thinking mode: {describe_thinking_mode(config)}")
     print("Ответ:")
 
     if profile.structured:
@@ -472,6 +486,7 @@ def main() -> None:
 
     print(f"Модель: {config.model}")
     print(f"API: {config.api_url}")
+    print(f"Thinking mode: {describe_thinking_mode(config)}")
 
     while True:
         choice = choose_menu_option()
