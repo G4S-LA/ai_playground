@@ -320,7 +320,7 @@ def ask_llm(
     )
 
     if not response.ok:
-        raise RuntimeError(f"Ошибка API {response.status_code}: {response.text}")
+        raise RuntimeError(format_api_error(response, config.api_url))
 
     result = response.json()
     choice = result["choices"][0]
@@ -334,6 +334,29 @@ def ask_llm(
         finish_reason=choice.get("finish_reason", "unknown"),
         usage=usage,
     )
+
+
+def format_api_error(response: requests.Response, fallback_url: str) -> str:
+    reason = str(response.reason or "").strip()
+    status = f"{response.status_code} {reason}".strip()
+    response_url = response.url or fallback_url
+    response_body = response.text.strip() or "<пустое тело ответа>"
+
+    lines = [
+        f"Ошибка API {status}",
+        f"URL: {response_url}",
+    ]
+
+    request_id = (
+        response.headers.get("x-request-id")
+        or response.headers.get("x-dashscope-request-id")
+        or response.headers.get("request-id")
+    )
+    if request_id:
+        lines.append(f"Request ID: {request_id}")
+
+    lines.append(f"Ответ сервера: {response_body}")
+    return "\n".join(lines)
 
 
 def describe_controls(profile: ControlProfile, config: Config) -> str:
