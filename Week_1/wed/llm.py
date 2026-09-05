@@ -322,7 +322,8 @@ async def execute_profiles_async(
                     raise RequestCancelled("Запросы отменены пользователем")
                 if console_value is not None:
                     print(
-                        "Для отмены текущих запросов введите 0 и нажмите Enter."
+                        "Для отмены текущих запросов введите 0 и нажмите Enter.",
+                        flush=True,
                     )
                 if all(profile_task.done() for profile_task in profile_tasks):
                     return list(
@@ -348,11 +349,15 @@ def execute_profiles(
     if len(profiles) > 1:
         print(
             "Четыре способа запущены параллельно. В способе 3 второй запрос "
-            "начнётся после генерации промпта."
+            "начнётся после генерации промпта.",
+            flush=True,
         )
     else:
-        print("Запрос запущен.")
-    print("Во время ожидания введите 0 и нажмите Enter, чтобы отменить.")
+        print("Запрос запущен.", flush=True)
+    print(
+        "Во время ожидания введите 0 и нажмите Enter, чтобы отменить.",
+        flush=True,
+    )
     return asyncio.run(execute_profiles_async(profiles, task, config, console))
 
 
@@ -487,7 +492,7 @@ def main() -> None:
         try:
             executions = execute_profiles(profiles, task, config, console)
         except RequestCancelled:
-            print("\nТекущие запросы отменены. Возврат в меню.")
+            print("\nТекущие запросы отменены. Возврат в меню.", flush=True)
             continue
         except (httpx.RequestError, ValueError) as error:
             print(f"\nОшибка выполнения запросов: {error}", file=sys.stderr)
