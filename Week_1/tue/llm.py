@@ -73,9 +73,7 @@ class Config:
             max_words=_positive_int("LLM_MAX_WORDS", 80),
             max_sentences=_positive_int("LLM_MAX_SENTENCES", 3),
             temperature=_float_in_range("LLM_TEMPERATURE", 0.2, 0.0, 2.0),
-            stop_sequence=os.getenv(
-                "LLM_STOP_SEQUENCE", "<END_OF_ANSWER>"
-            ),
+            stop_sequence=os.getenv("LLM_STOP_SEQUENCE", "."),
             qwen_disable_thinking_for_structured=_boolean(
                 "QWEN_DISABLE_THINKING_FOR_STRUCTURED", True
             ),
@@ -199,8 +197,11 @@ def build_system_prompt(profile: ControlProfile, config: Config) -> str:
 
     if profile.stop_sequence:
         instructions.append(
-            "Когда полностью закончишь ответ, выведи отдельной строкой "
-            f"маркер {config.stop_sequence}. После маркера ничего не пиши."
+            "Начни ответ с одного законченного предложения и обязательно "
+            f"заверши его точной последовательностью {config.stop_sequence!r}. "
+            "Не используй эту последовательность раньше конца первого "
+            "предложения. После неё планируй продолжить ответ вторым "
+            "предложением."
         )
 
     if profile.completion_flag:
