@@ -110,7 +110,11 @@ class LlmResult:
 
 PROFILES = {
     "1": ControlProfile("1", "Без ограничений"),
-    "2": ControlProfile("2", "Только строгий формат", structured=True),
+    "2": ControlProfile(
+        "2",
+        "Только строгий формат (предложения по строкам)",
+        structured=True,
+    ),
     "3": ControlProfile("3", "Только ограничение длины", length_limited=True),
     "4": ControlProfile("4", "Только stop sequence", stop_sequence=True),
     "5": ControlProfile(
@@ -171,17 +175,22 @@ def build_system_prompt(profile: ControlProfile, config: Config) -> str:
     instructions = [config.system_prompt]
 
     if profile.structured:
-        fields = "`answer`"
+        fields = "`sentences`"
         if profile.completion_flag:
             fields += " и `completion_status`"
         instructions.append(
             "Верни только JSON-объект без Markdown и пояснений вокруг него. "
-            f"Объект должен содержать поля {fields}; поле `answer` содержит "
-            "сам ответ на вопрос."
+            f"Объект должен содержать поля {fields}. Поле `sentences` — массив "
+            "строк: каждый его элемент содержит ровно одно законченное "
+            "предложение без переноса строки и без нумерации."
         )
 
     if profile.length_limited:
-        target = "Значение поля `answer`" if profile.structured else "Ответ"
+        target = (
+            "Суммарный текст всех элементов массива `sentences`"
+            if profile.structured
+            else "Ответ"
+        )
         instructions.append(
             f"{target} должно содержать не более {config.max_words} слов "
             f"и не более {config.max_sentences} коротких предложений. "
@@ -196,9 +205,9 @@ def build_system_prompt(profile: ControlProfile, config: Config) -> str:
 
     if profile.completion_flag:
         instructions.append(
-            "Условие завершения: сначала полностью сформулируй `answer`, затем "
-            "установи `completion_status` в строку `completed`. После закрывающей "
-            "скобки JSON ничего не добавляй."
+            "Условие завершения: сначала полностью сформируй массив `sentences`, "
+            "затем установи `completion_status` в строку `completed`. После "
+            "закрывающей скобки JSON ничего не добавляй."
         )
 
     return " ".join(instructions)
@@ -212,12 +221,20 @@ def build_response_format(
         return {"type": "json_object"}
 
     properties: Dict[str, Any] = {
-        "answer": {
-            "type": "string",
-            "description": "Полный содержательный ответ на запрос пользователя.",
+        "sentences": {
+            "type": "array",
+            "description": (
+                "Ответ, разделённый на отдельные законченные предложения."
+            ),
+            "items": {
+                "type": "string",
+                "description": (
+                    "Одно законченное предложение без нумерации и переноса строки."
+                ),
+            },
         }
     }
-    required = ["answer"]
+    required = ["sentences"]
 
     if profile.completion_flag:
         properties["completion_status"] = {
@@ -230,7 +247,7 @@ def build_response_format(
     return {
         "type": "json_schema",
         "json_schema": {
-            "name": "controlled_answer",
+            "name": "controlled_sentences",
             "strict": True,
             "schema": {
                 "type": "object",
@@ -331,10 +348,18 @@ def validate_structured_result(
         return ["верхний уровень ответа должен быть JSON-объектом"]
 
     warnings = []
-    expected_fields = {"answer"}
+    expected_fields = {"sentences"}
 
-    if not isinstance(parsed.get("answer"), str):
-        warnings.append("поле `answer` отсутствует или не является строкой")
+    sentences = parsed.get("sentences")
+    if not isinstance(sentences, list):
+        warnings.append("поле `sentences` отсутствует или не является массивом")
+    elif not sentences:
+        warnings.append("массив `sentences` не должен быть пустым")
+    elif any(
+        not isinstance(sentence, str) or not sentence.strip()
+        for sentence in sentences
+    ):
+        warnings.append("каждый элемент `sentences` должен быть непустой строкой")
 
     if profile.completion_flag:
         expected_fields.add("completion_status")
@@ -368,8 +393,28 @@ def print_result(
             print(result.content)
             print("Предупреждение: API не вернул валидный JSON.")
         else:
-            print(json.dumps(parsed, ensure_ascii=False, indent=2))
-            for warning in validate_structured_result(parsed, profile):
+            warnings = validate_structured_result(parsed, profile)
+            sentences = (
+                parsed.get("sentences") if isinstance(parsed, dict) else None
+            )
+            if (
+                isinstance(sentences, list)
+                and sentences
+                and all(
+                    isinstance(sentence, str) and sentence.strip()
+                    for sentence in sentences
+                )
+            ):
+                for number, sentence in enumerate(sentences, start=1):
+                    print(f"{number}. {sentence.strip()}")
+                if profile.completion_flag:
+                    print(
+                        "Статус завершения: "
+                        f"{parsed.get('completion_status', 'не указан')}"
+                    )
+            else:
+                print(json.dumps(parsed, ensure_ascii=False, indent=2))
+            for warning in warnings:
                 print(f"Предупреждение о формате: {warning}.")
     else:
         print(result.content)
