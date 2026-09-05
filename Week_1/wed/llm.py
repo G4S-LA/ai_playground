@@ -1,17 +1,57 @@
 #!/usr/bin/env python3
 
+import asyncio
 import os
+import queue
 import sys
+import threading
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-import requests
+import httpx
 
 
 PROMPT_ENGINEER_SYSTEM = (
     "Ты — специалист по проектированию промптов. Создавай точные, "
     "самодостаточные промпты для решения задач, но не решай сами задачи."
 )
+_END_OF_INPUT = object()
+
+
+class RequestCancelled(RuntimeError):
+    pass
+
+
+class ConsoleInput:
+    def __init__(self) -> None:
+        self._lines: queue.Queue[Any] = queue.Queue()
+        self._reader = threading.Thread(target=self._read_lines, daemon=True)
+        self._reader.start()
+
+    def _read_lines(self) -> None:
+        while True:
+            line = sys.stdin.readline()
+            if line == "":
+                self._lines.put(_END_OF_INPUT)
+                return
+            self._lines.put(line.rstrip("\r\n"))
+
+    def read(self, prompt: str) -> str:
+        print(prompt, end="", flush=True)
+        value = self._lines.get()
+        if value is _END_OF_INPUT:
+            raise EOFError
+        return normalize_console_input(value)
+
+    def poll(self) -> Optional[str]:
+        try:
+            value = self._lines.get_nowait()
+        except queue.Empty:
+            return None
+        if value is _END_OF_INPUT:
+            raise EOFError
+        return normalize_console_input(value)
 
 
 @dataclass(frozen=True)
@@ -21,6 +61,7 @@ class Config:
     model: str
     system_prompt: str
     temperature: float
+    timeout_seconds: int
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -47,6 +88,7 @@ class Config:
                 minimum=0.0,
                 maximum=2.0,
             ),
+            timeout_seconds=_positive_int("LLM_TIMEOUT_SECONDS", 360),
         )
 
 
@@ -93,6 +135,17 @@ def _float_in_range(
         raise RuntimeError(
             f"{name} должен быть в диапазоне [{minimum}, {maximum})"
         )
+    return value
+
+
+def _positive_int(name: str, default: int) -> int:
+    raw_value = _env(name, str(default))
+    try:
+        value = int(raw_value)
+    except ValueError as error:
+        raise RuntimeError(f"{name} должен быть целым числом") from error
+    if value <= 0:
+        raise RuntimeError(f"{name} должен быть больше нуля")
     return value
 
 
@@ -148,22 +201,61 @@ def build_payload(
     return payload
 
 
+async def post_with_cancellation(
+    user_prompt: str,
+    config: Config,
+    console: ConsoleInput,
+    system_prompt: Optional[str] = None,
+) -> httpx.Response:
+    timeout = httpx.Timeout(config.timeout_seconds)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        request_task = asyncio.create_task(
+            client.post(
+                config.api_url,
+                headers={
+                    "Authorization": f"Bearer {config.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=build_payload(user_prompt, config, system_prompt),
+            )
+        )
+
+        try:
+            while True:
+                console_value = console.poll()
+                if console_value == "0":
+                    raise RequestCancelled("Запрос отменён пользователем")
+                if console_value is not None:
+                    print(
+                        "Для отмены текущего запроса введите 0 и нажмите Enter."
+                    )
+                if request_task.done():
+                    return await request_task
+                await asyncio.sleep(0.1)
+        finally:
+            if not request_task.done():
+                request_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await request_task
+
+
 def ask_llm(
     user_prompt: str,
     config: Config,
+    console: ConsoleInput,
     system_prompt: Optional[str] = None,
 ) -> LlmResult:
-    response = requests.post(
-        config.api_url,
-        headers={
-            "Authorization": f"Bearer {config.api_key}",
-            "Content-Type": "application/json",
-        },
-        json=build_payload(user_prompt, config, system_prompt),
-        timeout=120,
+    print("Ожидание ответа: введите 0 и нажмите Enter, чтобы отменить запрос.")
+    response = asyncio.run(
+        post_with_cancellation(
+            user_prompt,
+            config,
+            console,
+            system_prompt,
+        )
     )
 
-    if not response.ok:
+    if not response.is_success:
         raise RuntimeError(format_api_error(response, config.api_url))
 
     result = response.json()
@@ -179,8 +271,8 @@ def ask_llm(
     )
 
 
-def format_api_error(response: requests.Response, fallback_url: str) -> str:
-    reason = str(response.reason or "").strip()
+def format_api_error(response: httpx.Response, fallback_url: str) -> str:
+    reason = str(response.reason_phrase or "").strip()
     status = f"{response.status_code} {reason}".strip()
     response_url = response.url or fallback_url
     response_body = response.text.strip() or "<пустое тело ответа>"
@@ -216,7 +308,12 @@ def print_result(result: LlmResult) -> None:
         )
 
 
-def run_profile(profile: PromptProfile, task: str, config: Config) -> None:
+def run_profile(
+    profile: PromptProfile,
+    task: str,
+    config: Config,
+    console: ConsoleInput,
+) -> None:
     print(f"\n=== {profile.title} ===")
 
     if profile.key == "1":
@@ -232,6 +329,7 @@ def run_profile(profile: PromptProfile, task: str, config: Config) -> None:
         prompt_result = ask_llm(
             prompt_request,
             config,
+            console,
             system_prompt=PROMPT_ENGINEER_SYSTEM,
         )
         solution_prompt = prompt_result.content.strip()
@@ -247,7 +345,7 @@ def run_profile(profile: PromptProfile, task: str, config: Config) -> None:
     print("Промпт для решения:")
     print(solution_prompt)
     print("\nОтвет:")
-    print_result(ask_llm(solution_prompt, config))
+    print_result(ask_llm(solution_prompt, config, console))
 
 
 def normalize_console_input(value: str) -> str:
@@ -261,11 +359,7 @@ def normalize_console_input(value: str) -> str:
     return "".join(characters).strip()
 
 
-def read_console_input(prompt: str) -> str:
-    return normalize_console_input(input(prompt))
-
-
-def choose_menu_option() -> str:
+def choose_menu_option(console: ConsoleInput) -> str:
     print("\nВыберите способ решения:")
     for key, profile in PROFILES.items():
         print(f"  {key}. {profile.title}")
@@ -273,18 +367,18 @@ def choose_menu_option() -> str:
     print(f"  {EXIT_OPTION}. Выход")
 
     while True:
-        choice = read_console_input("Ваш выбор: ")
+        choice = console.read("Ваш выбор: ")
         if choice in {*PROFILES, COMPARE_OPTION, EXIT_OPTION}:
             return choice
         print("Введите число от 0 до 5.")
 
 
-def read_task(previous_task: Optional[str]) -> str:
+def read_task(console: ConsoleInput, previous_task: Optional[str]) -> str:
     if previous_task:
-        task = read_console_input("Задача (Enter — повторить предыдущую): ")
+        task = console.read("Задача (Enter — повторить предыдущую): ")
         return task or previous_task
 
-    task = read_console_input("Введите задачу: ")
+    task = console.read("Введите задачу: ")
     if not task:
         raise RuntimeError("Задача не должна быть пустой")
     return task
@@ -298,15 +392,17 @@ def profiles_for_choice(choice: str) -> list[PromptProfile]:
 
 def main() -> None:
     config = Config.from_env()
+    console = ConsoleInput()
     previous_task: Optional[str] = None
     command_line_task = normalize_console_input(" ".join(sys.argv[1:])) or None
 
     print(f"Модель: {config.model}")
     print(f"API: {config.api_url}")
     print(f"Температура: {config.temperature}")
+    print(f"Таймаут одного API-вызова: {config.timeout_seconds} с")
 
     while True:
-        choice = choose_menu_option()
+        choice = choose_menu_option(console)
         if choice == EXIT_OPTION:
             return
 
@@ -315,15 +411,18 @@ def main() -> None:
             command_line_task = None
             print(f"Задача: {task}")
         else:
-            task = read_task(previous_task)
+            task = read_task(console, previous_task)
         previous_task = task
 
         for profile in profiles_for_choice(choice):
             try:
-                run_profile(profile, task, config)
+                run_profile(profile, task, config, console)
+            except RequestCancelled:
+                print("\nТекущий запрос отменён. Возврат в меню.")
+                break
             except (
                 RuntimeError,
-                requests.RequestException,
+                httpx.RequestError,
                 ValueError,
                 KeyError,
                 IndexError,
