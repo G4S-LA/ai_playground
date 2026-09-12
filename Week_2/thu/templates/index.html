@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Чаты LLM-агента</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <main class="workspace">
+      <aside class="sidebar">
+        <div class="brand">
+          <p class="eyebrow">Неделя 2 · Четверг</p>
+          <h1>Мои чаты</h1>
+        </div>
+        <button id="new-chat-button" class="new-chat-button" type="button">
+          + Новый чат
+        </button>
+        <nav id="chat-list" class="chat-list" aria-label="Сохранённые чаты"></nav>
+      </aside>
+
+      <section class="chat">
+        <header class="chat__header">
+          <div>
+            <h2 id="chat-title">Загрузка...</h2>
+            <p class="model">Модель: {{ model }}</p>
+          </div>
+          <button id="delete-button" class="secondary-button" type="button">
+            Удалить чат
+          </button>
+        </header>
+
+        <section class="metrics" aria-label="Токены и стоимость">
+          <div class="budget-controls">
+            <label for="context-window">Лимит контекста, токены</label>
+            <input id="context-window" type="number" min="1" step="1" value="8192">
+          </div>
+          <div class="compression-controls">
+            <label><input id="compression-enabled" type="checkbox" checked> Сжатие истории</label>
+            <label for="keep-recent">Свежих сообщений</label>
+            <input id="keep-recent" type="number" min="2" step="2" value="10">
+            <label for="summary-every">Сжимать каждые</label>
+            <input id="summary-every" type="number" min="2" step="2" value="10">
+          </div>
+          <p id="compression-status" class="metrics-note" role="status"></p>
+          <details id="summary-details">
+            <summary>Резюме старой истории</summary>
+            <p class="metrics-note">Обновляется перед ответом, когда накопится порог старых сообщений.
+              Свежие сообщения передаются дословно. Summary может упускать детали.</p>
+            <pre id="history-summary">Summary ещё не создано.</pre>
+          </details>
+          <p id="token-preview" role="status">Оценка контекста загружается…</p>
+          <progress id="context-progress" max="8192" value="0"
+            aria-label="Заполнение контекста" aria-describedby="token-preview context-breakdown"></progress>
+          <p id="context-breakdown" class="metrics-note" hidden></p>
+          <div class="last-turn-usage" aria-live="polite">
+            <p id="last-request-tokens">Последний запрос в токенах: —</p>
+            <p id="last-answer-tokens">Последний ответ в токенах: —</p>
+          </div>
+          <p id="usage-totals"></p>
+          <details>
+            <summary>Подробная статистика</summary>
+            <p id="token-details" class="metrics-note"></p>
+            <p class="metrics-note">Полоска показывает размер входного контекста:
+              инструкция, summary при включённом сжатии, свежие сообщения и новый вопрос.
+              До обновления summary прогноз показывает текущий несжатый буфер.
+              Без сжатия отправляются последние пары, которые помещаются в окно, как в среде.
+              Полная история остаётся в чате. Пропущенные сообщения модель не видит.
+              Последний запрос включает только фактически отправленную часть истории.
+              Последний ответ включает текст и рассуждения модели.
+              Расход диалога складывается из всех запросов и ответов:
+              выбранная часть истории отправляется повторно на каждом ходе.</p>
+            <p id="compression-usage" class="metrics-note"></p>
+            <p class="metrics-note">≈ — локальная оценка, которая может отличаться от счёта провайдера.
+              Генерация включает ответ и рассуждения модели.</p>
+            <div class="usage-table-wrap">
+              <table>
+                <thead><tr><th>Ход</th><th>Вопрос ≈</th><th>История после ≈</th><th>Вход</th>
+                  <th>Генерация</th><th>Пропущено сообщений</th><th>Токены ∑</th><th>USD за ход</th><th>USD ∑</th></tr></thead>
+                <tbody id="usage-rows"></tbody>
+              </table>
+            </div>
+          </details>
+        </section>
+
+        <section id="messages" class="messages" aria-live="polite"></section>
+
+        <form id="chat-form" class="composer">
+          <label class="visually-hidden" for="message-input">Сообщение</label>
+          <textarea
+            id="message-input"
+            name="message"
+            rows="3"
+            maxlength="4000"
+            placeholder="Введите запрос..."
+            required
+          ></textarea>
+          <button id="send-button" class="primary-button" type="submit">
+            Отправить
+          </button>
+        </form>
+        <p class="hint">Enter — отправить, Shift+Enter — новая строка</p>
+      </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>
