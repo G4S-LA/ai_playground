@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Чаты LLM-агента</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <main class="workspace">
+      <aside class="sidebar">
+        <div class="brand">
+          <p class="eyebrow">Неделя 2 · Вторник</p>
+          <h1>Мои чаты</h1>
+        </div>
+        <button id="new-chat-button" class="new-chat-button" type="button">
+          + Новый чат
+        </button>
+        <nav id="chat-list" class="chat-list" aria-label="Сохранённые чаты"></nav>
+      </aside>
+
+      <section class="chat">
+        <header class="chat__header">
+          <div>
+            <h2 id="chat-title">Загрузка...</h2>
+            <p class="model">Модель: {{ model }}</p>
+          </div>
+          <button id="delete-button" class="secondary-button" type="button">
+            Удалить чат
+          </button>
+        </header>
+
+        <section id="messages" class="messages" aria-live="polite"></section>
+
+        <form id="chat-form" class="composer">
+          <label class="visually-hidden" for="message-input">Сообщение</label>
+          <textarea
+            id="message-input"
+            name="message"
+            rows="3"
+            maxlength="4000"
+            placeholder="Введите запрос..."
+            required
+          ></textarea>
+          <button id="send-button" class="primary-button" type="submit">
+            Отправить
+          </button>
+        </form>
+        <p class="hint">Enter — отправить, Shift+Enter — новая строка</p>
+      </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>
