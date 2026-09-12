@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Простой LLM-агент</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <main class="chat">
+      <header class="chat__header">
+        <div>
+          <p class="eyebrow">Неделя 2 · Понедельник</p>
+          <h1>Простой LLM-агент</h1>
+          <p class="model">Модель: {{ model }}</p>
+        </div>
+        <button id="reset-button" class="secondary-button" type="button">
+          Очистить чат
+        </button>
+      </header>
+
+      <section id="messages" class="messages" aria-live="polite">
+        <div class="message message--system">
+          Напишите сообщение — агент отправит его в LLM и покажет ответ здесь.
+        </div>
+      </section>
+
+      <form id="chat-form" class="composer">
+        <label class="visually-hidden" for="message-input">Сообщение</label>
+        <textarea
+          id="message-input"
+          name="message"
+          rows="3"
+          maxlength="4000"
+          placeholder="Введите запрос..."
+          required
+        ></textarea>
+        <button id="send-button" class="primary-button" type="submit">
+          Отправить
+        </button>
+      </form>
+      <p class="hint">Enter — отправить, Shift+Enter — новая строка</p>
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>
