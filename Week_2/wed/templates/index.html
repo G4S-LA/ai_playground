@@ -32,17 +32,24 @@
 
         <section class="metrics" aria-label="Токены и стоимость">
           <div class="budget-controls">
-            <label for="context-window">Локальное окно, токены</label>
+            <label for="context-window">Лимит контекста, токены</label>
             <input id="context-window" type="number" min="1" step="1" value="8192">
             <span id="output-budget"></span>
           </div>
           <p id="token-preview" role="status">Оценка контекста загружается…</p>
-          <progress id="context-progress" max="8192" value="0" aria-label="Заполнение окна"></progress>
+          <progress id="context-progress" max="8192" value="0"
+            aria-label="Контекст с резервом на ответ" aria-describedby="context-breakdown"></progress>
+          <p id="context-breakdown" class="metrics-note"></p>
           <p id="usage-totals"></p>
           <details>
-            <summary>Расход по ходам</summary>
-            <p class="metrics-note">Вход — весь запрос вместе с историей. Генерация включает рассуждения,
-              если провайдер учитывает их в usage. ≈ — локальная оценка.</p>
+            <summary>Подробная статистика</summary>
+            <p id="token-details" class="metrics-note"></p>
+            <p class="metrics-note">Полоска показывает место для одного запроса:
+              инструкция, история, новый вопрос и резерв на ответ.
+              Расход диалога складывается из всех запросов и ответов:
+              история отправляется повторно на каждом ходе.</p>
+            <p class="metrics-note">≈ — локальная оценка, которая может отличаться от счёта провайдера.
+              Генерация включает ответ и рассуждения модели.</p>
             <div class="usage-table-wrap">
               <table>
                 <thead><tr><th>Ход</th><th>Вопрос ≈</th><th>История после ≈</th><th>Вход</th>

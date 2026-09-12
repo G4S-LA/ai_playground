@@ -213,6 +213,9 @@ h2 {
 .metrics table { width: 100%; border-collapse: collapse; white-space: nowrap; }
 .metrics th, .metrics td { padding: 6px 8px; text-align: right; border-bottom: 1px solid #e7ebf2; }
 .metrics summary { cursor: pointer; }
+#token-preview { margin-bottom: 8px; font-weight: 650; }
+#context-breakdown { margin-top: 6px; }
+#usage-totals { padding-top: 10px; border-top: 1px solid #e7ebf2; }
 
 .message {
   max-width: 82%;
@@ -234,6 +237,11 @@ h2 {
   align-self: flex-start;
   background: #edf2f7;
   border-bottom-left-radius: 5px;
+}
+
+.message--pending {
+  color: #667085;
+  font-style: italic;
 }
 
 .message--system {

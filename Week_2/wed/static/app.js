@@ -12,6 +12,9 @@ const contextProgress = document.querySelector("#context-progress");
 const usageTotals = document.querySelector("#usage-totals");
 const usageRows = document.querySelector("#usage-rows");
 const outputBudget = document.querySelector("#output-budget");
+const contextBreakdown = document.querySelector("#context-breakdown");
+const tokenDetails = document.querySelector("#token-details");
+const number = new Intl.NumberFormat("ru-RU");
 let previewTimer;
 let previewVersion = 0;
 
@@ -22,13 +25,19 @@ function money(value) {
 function renderStatistics(stats) {
   const total = stats.totals;
   contextWindow.value = stats.context_window_tokens;
-  outputBudget.textContent = `Резерв ответа: ${stats.max_output_tokens}`;
-  usageTotals.textContent = `История: ≈${stats.history_tokens_estimate} ток. · ` +
-    `Расход чата: ${total.has_estimates ? "≈" : ""}${total.total_tokens} ток. ` +
-    `(вход ${total.input_tokens}, генерация ${total.output_tokens}) · ` +
-    (total.unpriced_turns
-      ? `Известная стоимость: $${money(total.known_cost_usd)}; без цены: ${total.unpriced_turns} ход.`
-      : `Стоимость по тарифам: $${money(total.known_cost_usd)}`) +
+  outputBudget.textContent = `Резерв на ответ: ${number.format(stats.max_output_tokens)} токенов`;
+  let cost = `Стоимость по тарифам: $${money(total.known_cost_usd)}`;
+  if (total.turn_count === 0) {
+    cost = "Стоимость появится после ответа";
+  } else if (total.unpriced_turns === total.turn_count) {
+    cost = "Стоимость не рассчитана — тарифы не заданы полностью";
+  } else if (total.unpriced_turns) {
+    cost = `Известная стоимость: $${money(total.known_cost_usd)}; без цены: ${total.unpriced_turns} ход.`;
+  }
+  usageTotals.textContent = `Расход всего диалога: ${total.has_estimates ? "≈" : ""}` +
+    `${number.format(total.total_tokens)} токенов · ${cost}`;
+  tokenDetails.textContent = `Сохранённая история: ≈${number.format(stats.history_tokens_estimate)} токенов. ` +
+    `Всего отправлено: ${number.format(total.input_tokens)}; сгенерировано: ${number.format(total.output_tokens)}.` +
     (stats.untracked_turns ? ` · Старых ходов без статистики: ${stats.untracked_turns}` : "");
   usageRows.replaceChildren();
   let cumulativeTokens = 0;
@@ -59,12 +68,16 @@ function renderStatistics(stats) {
 }
 
 function renderPreview(preview) {
-  tokenPreview.textContent = `Текущий вопрос: ≈${preview.request_tokens_estimate} · ` +
-    `Весь вход: ≈${preview.input_tokens_estimate} + резерв ${preview.max_output_tokens} = ` +
-    `${preview.required_tokens} / ${preview.context_window_tokens} ток. ` +
-    (preview.fits ? "" : "Переполнение — запрос будет отклонён. ") +
-    `Оценка: ${preview.encoding}; у DeepSeek фактический счёт может отличаться.`;
+  tokenPreview.textContent = `Контекст с резервом: ≈${number.format(preview.required_tokens)} ` +
+    `из ${number.format(preview.context_window_tokens)} токенов`;
+  contextBreakdown.textContent = `Вход ≈${number.format(preview.input_tokens_estimate)} ` +
+    `(новый вопрос ≈${number.format(preview.request_tokens_estimate)}) + ` +
+    `резерв ответа ${number.format(preview.max_output_tokens)}. ` +
+    (preview.fits
+      ? `Свободно ≈${number.format(preview.context_window_tokens - preview.required_tokens)}.`
+      : `Переполнение на ≈${number.format(preview.required_tokens - preview.context_window_tokens)} токенов — отправка невозможна.`);
   tokenPreview.classList.toggle("is-overflow", !preview.fits);
+  contextBreakdown.classList.toggle("is-overflow", !preview.fits);
   contextProgress.classList.toggle("is-overflow", !preview.fits);
   contextProgress.max = preview.context_window_tokens;
   contextProgress.value = Math.min(preview.required_tokens, preview.context_window_tokens);
@@ -105,6 +118,7 @@ function addMessage(role, text) {
   element.textContent = text;
   messages.appendChild(element);
   messages.scrollTop = messages.scrollHeight;
+  return element;
 }
 
 function renderMessages(history) {
@@ -222,30 +236,45 @@ form.addEventListener("submit", async (event) => {
     tokenPreview.textContent = "Размер окна должен быть положительным целым числом.";
     return;
   }
+  const draft = input.value;
+  if (knownChats.find((chat) => chat.id === currentChatId)?.message_count === 0) {
+    messages.replaceChildren();
+  }
+  const userMessage = addMessage("user", message);
+  const pendingAnswer = addMessage("agent", "Модель готовит ответ…");
+  pendingAnswer.classList.add("message--pending");
+  input.value = "";
   setBusy(true);
+  let answerReceived = false;
+  const chatUrl = `/api/chats/${encodeURIComponent(currentChatId)}`;
+  const requestOptions = {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, context_window_tokens: windowTokens }),
+  };
 
   try {
-    const result = await requestJson(
-      `/api/chats/${encodeURIComponent(currentChatId)}/messages`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, context_window_tokens: windowTokens }),
-      },
-    );
-    input.value = "";
-    if (knownChats.find((chat) => chat.id === currentChatId)?.message_count === 0) {
-      messages.replaceChildren();
-    }
-    addMessage("user", message);
-    addMessage("agent", result.answer || "Модель не успела сформировать текст ответа.");
+    const { preview } = await requestJson(`${chatUrl}/preview`, requestOptions);
+    renderPreview(preview);
+    const result = await requestJson(`${chatUrl}/messages`, requestOptions);
+    answerReceived = true;
+    pendingAnswer.classList.remove("message--pending");
+    pendingAnswer.textContent = result.answer || "Модель не успела сформировать текст ответа.";
     renderStatistics(result.statistics);
     const lastTurn = result.statistics.turns.at(-1);
     if (lastTurn?.warning) addMessage("error", lastTurn.warning);
+    messages.scrollTop = messages.scrollHeight;
     chatTitle.textContent = result.chat.title;
     await refreshChatList();
   } catch (error) {
-    addMessage("error", `Ошибка: ${error.message}`);
+    if (!answerReceived) {
+      userMessage.remove();
+      pendingAnswer.remove();
+      input.value = draft;
+    }
+    addMessage("error", answerReceived
+      ? `Ответ получен, но не удалось обновить список чатов: ${error.message}`
+      : `Ошибка: ${error.message}`);
     if (error.preview) renderPreview(error.preview);
   } finally {
     setBusy(false);

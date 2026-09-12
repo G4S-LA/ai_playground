@@ -102,6 +102,44 @@ class ContextTest(unittest.TestCase):
         agent.delete()
         self.assertEqual(self.repository.load_turns(self.chat.id), [])
 
+    def test_reasoning_prefix_is_hidden_but_still_counted_as_generation(self):
+        raw = "<think>Вычисления</think>\n</think>Ответ"
+        agent = self.make_agent([response_with(raw), response_with("Продолжение")])
+        self.assertEqual(agent.reply("Вопрос"), "Ответ")
+        first = agent.statistics()["turns"][0]
+        self.assertGreater(first["output_tokens"], first["answer_tokens_estimate"])
+        self.assertEqual(first["output_source"], "estimate")
+        self.assertEqual(self.repository.load_messages(self.chat.id)[1]["content"], "Ответ")
+        agent.reply("Следующий вопрос")
+        self.assertEqual(self.http.calls[1]["json"]["messages"][2]["content"], "Ответ")
+
+    def test_api_usage_is_unchanged_when_answer_is_cleaned(self):
+        agent = self.make_agent([FakeResponse({
+            "choices": [{"message": {"content": "</think>Ответ"}}],
+            "usage": {"prompt_tokens": 100, "completion_tokens": 75},
+        })])
+        self.assertEqual(agent.reply("Вопрос"), "Ответ")
+        self.assertEqual(agent.last_turn["output_tokens"], 75)
+        self.assertEqual(agent.last_turn["output_source"], "api")
+
+    def test_truncated_reasoning_is_saved_as_empty_visible_answer(self):
+        agent = self.make_agent([FakeResponse({
+            "choices": [{"message": {"content": "<think>Не закончил рассуждения"},
+                         "finish_reason": "length"}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 32},
+        })])
+        self.assertEqual(agent.reply("Вопрос"), "")
+        self.assertEqual(agent.last_turn["output_tokens"], 32)
+        self.assertTrue(agent.last_turn["warning"])
+
+    def test_old_assistant_prefix_is_cleaned_without_changing_user_text(self):
+        self.repository.append_turn(self.chat.id, "</think> — что это?", "</think>Ответ")
+        agent = self.make_agent()
+        agent.reply("Продолжай")
+        sent = self.http.calls[0]["json"]["messages"]
+        self.assertEqual(sent[1]["content"], "</think> — что это?")
+        self.assertEqual(sent[2]["content"], "Ответ")
+
     def test_invalid_window_and_rates_are_rejected(self):
         agent = self.make_agent()
         for value in (0, -1, 2.5, True, "100"):

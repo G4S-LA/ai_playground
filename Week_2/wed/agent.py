@@ -11,6 +11,7 @@ from typing import Any, Protocol
 import requests
 
 from chat_repository import ChatRepository, ChatRepositoryError
+from model_output import visible_answer
 from token_usage import TokenCounter, completion_usage, cost_usd, totals
 
 
@@ -269,11 +270,12 @@ class SimpleAgent:
         answer = self._extract_answer(data)
         finish_reason = data["choices"][0].get("finish_reason", "unknown")
         message = data["choices"][0]["message"]
+        raw_content = message.get("content") or ""
         reasoning = message.get("reasoning_content") or ""
         reasoning = reasoning if isinstance(reasoning, str) else ""
         usage = completion_usage(
             data, preview["input_tokens_estimate"],
-            self._counter.text(answer) + self._counter.text(reasoning),
+            self._counter.text(raw_content) + self._counter.text(reasoning),
         )
         stats = {
             **preview, **usage,
@@ -327,11 +329,15 @@ class SimpleAgent:
         except (KeyError, IndexError, TypeError) as error:
             raise AgentError("LLM API вернул ответ в неожиданном формате") from error
 
-        if data["choices"][0].get("finish_reason") == "length" and content in (None, ""):
+        truncated = data["choices"][0].get("finish_reason") == "length"
+        if content is None and truncated:
             return ""
-        if not isinstance(content, str) or not content.strip():
+        if not isinstance(content, str):
             raise AgentError("LLM API вернул пустой ответ")
-        return content.strip()
+        answer = visible_answer(content)
+        if not answer and not truncated:
+            raise AgentError("LLM API вернул пустой ответ после удаления служебного блока")
+        return answer
 
 
 def _env(name: str, default: str = "") -> str:

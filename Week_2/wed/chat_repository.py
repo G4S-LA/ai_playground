@@ -9,6 +9,8 @@ from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
+from model_output import visible_answer
+
 
 DEFAULT_CHAT_TITLE = "Пустой чат"
 MAX_TITLE_LENGTH = 60
@@ -163,7 +165,13 @@ class ChatRepository:
                 f"Не удалось загрузить сообщения: {error}"
             ) from error
         return [
-            {"role": str(row["role"]), "content": str(row["content"])}
+            {
+                "role": str(row["role"]),
+                "content": (
+                    visible_answer(str(row["content"]))
+                    if row["role"] == "assistant" else str(row["content"])
+                ),
+            }
             for row in rows
         ]
 

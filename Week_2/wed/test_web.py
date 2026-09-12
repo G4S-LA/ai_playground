@@ -173,6 +173,13 @@ class PersistentWebAppTest(unittest.TestCase):
                 self.assertEqual(response.status_code, 400)
         self.assertEqual(self.repository.load_messages(chat.id), [])
 
+    def test_saved_reasoning_prefix_is_not_returned_to_web_chat(self):
+        chat = self.repository.create_chat()
+        self.repository.append_turn(chat.id, "Вопрос", "</think>\nОтвет")
+        response = self.client.get(f"/api/chats/{chat.id}/messages")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["messages"][1]["content"], "Ответ")
+
 
 if __name__ == "__main__":
     unittest.main()
