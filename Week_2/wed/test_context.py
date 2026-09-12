@@ -20,7 +20,9 @@ class ContextTest(unittest.TestCase):
 
     def test_exact_boundary_passes_and_one_token_less_blocks_without_network(self):
         agent = self.make_agent()
-        needed = agent.preview("Привет")["required_tokens"]
+        preview = agent.preview("Привет")
+        needed = preview["input_tokens_estimate"]
+        self.assertEqual(preview["required_tokens"], needed)
         agent.set_context_window(needed - 1)
         with self.assertRaises(ContextOverflowError) as caught:
             agent.reply("Привет")
@@ -30,8 +32,24 @@ class ContextTest(unittest.TestCase):
         self.assertEqual(self.repository.load_turns(self.chat.id), [])
         agent.set_context_window(needed)
         self.assertEqual(agent.reply("Привет"), "Ответ")
-        self.assertEqual(self.http.calls[0]["json"]["max_tokens"], 1024)
+        self.assertNotIn("max_tokens", self.http.calls[0]["json"])
         self.assertNotIn("context_window_tokens", self.http.calls[0]["json"])
+
+    def test_legacy_output_limit_does_not_cap_request_or_long_answer(self):
+        with patch.dict(os.environ, {
+            "LLM_API_KEY": "test", "LLM_HISTORY_DB": self.config.database_path,
+            "LLM_MAX_OUTPUT_TOKENS": "1024",
+        }, clear=True):
+            config = AgentConfig.from_env()
+        answer = "Длинный ответ. " * 1200
+        http = RecordingHttpClient([response_with(answer)])
+        agent = SimpleAgent(config, self.chat.id, self.repository, http)
+        agent.set_context_window(agent.preview("Привет")["input_tokens_estimate"])
+        self.assertEqual(agent.reply("Привет"), answer.strip())
+        self.assertGreater(agent.last_turn["output_tokens"], 1024)
+        self.assertNotIn("max_tokens", http.calls[0]["json"])
+        self.assertNotIn("max_completion_tokens", http.calls[0]["json"])
+        self.assertEqual(self.repository.load_messages(self.chat.id)[-1]["content"], answer.strip())
 
     def test_history_and_cumulative_spend_grow_and_survive_restart(self):
         agent = self.make_agent(
@@ -63,12 +81,13 @@ class ContextTest(unittest.TestCase):
             "choices": [{"message": {"content": None, "reasoning_content": "Думаю"},
                          "finish_reason": "length"}],
             "usage": {"prompt_tokens": 100, "completion_tokens": 32},
-        })], max_output_tokens=32)
+        })])
         self.assertEqual(agent.reply("Вопрос"), "")
         turn = agent.statistics()["turns"][0]
         self.assertEqual(turn["output_tokens"], 32)
         self.assertEqual(turn["answer_tokens_estimate"], 0)
         self.assertIn("оборван", turn["warning"])
+        self.assertIn("API", turn["warning"])
         self.assertEqual(turn["input_source"], "api")
 
     def test_provider_context_error_keeps_saved_history_and_usage(self):
@@ -146,7 +165,6 @@ class ContextTest(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(AgentError):
                 agent.set_context_window(value)
         for name, value in (("LLM_CONTEXT_WINDOW_TOKENS", "nan"),
-                            ("LLM_MAX_OUTPUT_TOKENS", "0"),
                             ("LLM_INPUT_PRICE_PER_MILLION", "inf"),
                             ("LLM_OUTPUT_PRICE_PER_MILLION", "-1")):
             with patch.dict(os.environ, {"LLM_API_KEY": "test", name: value}, clear=True):

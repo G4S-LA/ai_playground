@@ -215,6 +215,8 @@ h2 {
 .metrics summary { cursor: pointer; }
 #token-preview { margin-bottom: 8px; font-weight: 650; }
 #context-breakdown { margin-top: 6px; }
+.last-turn-usage { margin-top: 10px; }
+.last-turn-usage p { margin: 4px 0; }
 #usage-totals { padding-top: 10px; border-top: 1px solid #e7ebf2; }
 
 .message {

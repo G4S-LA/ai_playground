@@ -24,9 +24,7 @@ class ContextOverflowError(AgentError):
         self.preview = preview
         super().__init__(
             "Переполнение локального контекста: "
-            f"вход ≈{preview['input_tokens_estimate']} + "
-            f"резерв ответа {preview['max_output_tokens']} = "
-            f"{preview['required_tokens']} > окно {preview['context_window_tokens']}. "
+            f"вход ≈{preview['input_tokens_estimate']} > окно {preview['context_window_tokens']}. "
             "Запрос не отправлен. Увеличьте окно, сократите сообщение или начните новый чат."
         )
 
@@ -55,17 +53,14 @@ class AgentConfig:
     timeout_seconds: float
     database_path: str
     context_window_tokens: int = 8192
-    max_output_tokens: int = 1024
     token_encoding: str = "cl100k_base"
     input_price_per_million: float | None = None
     output_price_per_million: float | None = None
     cached_input_price_per_million: float | None = None
 
     def __post_init__(self) -> None:
-        for name in ("context_window_tokens", "max_output_tokens"):
-            value = getattr(self, name)
-            if type(value) is not int or value <= 0:
-                raise AgentError(f"{name} должен быть положительным целым числом")
+        if type(self.context_window_tokens) is not int or self.context_window_tokens <= 0:
+            raise AgentError("context_window_tokens должен быть положительным целым числом")
         for name in (
             "input_price_per_million", "output_price_per_million",
             "cached_input_price_per_million",
@@ -105,7 +100,6 @@ class AgentConfig:
                 str(Path(__file__).with_name("chat_history.sqlite3")),
             ),
             context_window_tokens=_positive_int("LLM_CONTEXT_WINDOW_TOKENS", 8192),
-            max_output_tokens=_positive_int("LLM_MAX_OUTPUT_TOKENS", 1024),
             token_encoding=_env("LLM_TOKEN_ENCODING", "cl100k_base"),
             input_price_per_million=_optional_price("LLM_INPUT_PRICE_PER_MILLION"),
             output_price_per_million=_optional_price("LLM_OUTPUT_PRICE_PER_MILLION"),
@@ -182,17 +176,15 @@ class SimpleAgent:
         prompt = user_request.strip()
         request_messages = [*self._messages, {"role": "user", "content": prompt}]
         input_tokens = self._counter.messages(request_messages)
-        required = input_tokens + self._config.max_output_tokens
         return {
             "request_tokens_estimate": self._counter.text(prompt),
             "history_tokens_estimate": sum(
                 self._counter.text(message["content"]) for message in self._messages[1:]
             ),
             "input_tokens_estimate": input_tokens,
-            "max_output_tokens": self._config.max_output_tokens,
             "context_window_tokens": self._context_window_tokens,
-            "required_tokens": required,
-            "fits": required <= self._context_window_tokens,
+            "required_tokens": input_tokens,
+            "fits": input_tokens <= self._context_window_tokens,
             "encoding": self._counter.encoding,
         }
 
@@ -207,7 +199,6 @@ class SimpleAgent:
             ),
             "untracked_turns": max(0, (len(self._messages) - 1) // 2 - len(turns)),
             "context_window_tokens": self._context_window_tokens,
-            "max_output_tokens": self._config.max_output_tokens,
             "encoding": self._counter.encoding,
         }
 
@@ -249,7 +240,6 @@ class SimpleAgent:
                     "model": self._config.model,
                     "messages": request_messages,
                     "temperature": self._config.temperature,
-                    "max_tokens": self._config.max_output_tokens,
                 },
                 timeout=self._config.timeout_seconds,
             )
@@ -288,7 +278,7 @@ class SimpleAgent:
             ),
             "finish_reason": finish_reason,
             "warning": (
-                "Достигнут лимит генерации: ответ оборван или бюджет ушёл на рассуждения."
+                "API сообщил о достижении лимита длины (finish_reason=length). Ответ может быть оборван."
                 if finish_reason == "length" else None
             ),
             "cost_usd": cost_usd(

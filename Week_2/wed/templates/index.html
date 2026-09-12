@@ -34,18 +34,23 @@
           <div class="budget-controls">
             <label for="context-window">Лимит контекста, токены</label>
             <input id="context-window" type="number" min="1" step="1" value="8192">
-            <span id="output-budget"></span>
           </div>
           <p id="token-preview" role="status">Оценка контекста загружается…</p>
           <progress id="context-progress" max="8192" value="0"
-            aria-label="Контекст с резервом на ответ" aria-describedby="context-breakdown"></progress>
-          <p id="context-breakdown" class="metrics-note"></p>
+            aria-label="Заполнение контекста" aria-describedby="token-preview context-breakdown"></progress>
+          <p id="context-breakdown" class="metrics-note" hidden></p>
+          <div class="last-turn-usage" aria-live="polite">
+            <p id="last-request-tokens">Последний запрос в токенах: —</p>
+            <p id="last-answer-tokens">Последний ответ в токенах: —</p>
+          </div>
           <p id="usage-totals"></p>
           <details>
             <summary>Подробная статистика</summary>
             <p id="token-details" class="metrics-note"></p>
-            <p class="metrics-note">Полоска показывает место для одного запроса:
-              инструкция, история, новый вопрос и резерв на ответ.
+            <p class="metrics-note">Полоска показывает размер входного контекста:
+              инструкция, история и новый вопрос.
+              Последний запрос включает инструкцию, историю и вопрос последнего завершённого хода.
+              Последний ответ включает текст и рассуждения модели.
               Расход диалога складывается из всех запросов и ответов:
               история отправляется повторно на каждом ходе.</p>
             <p class="metrics-note">≈ — локальная оценка, которая может отличаться от счёта провайдера.

@@ -1,6 +1,7 @@
 """Проверка веб-чата в Chromium с задержанными подставными ответами (без LLM API)."""
 
 import argparse
+import re
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.parse import urlsplit
@@ -18,7 +19,10 @@ class BrowserHttpClient:
         question = kwargs["json"]["messages"][-1]["content"]
         if question == "Сбой API":
             return FakeResponse({}, ok=False, status_code=503, text="API недоступен")
-        return response_with(f"</think>Ответ на: {question}")
+        payload = response_with(f"</think>Ответ на: {question}").json()
+        if question == "Ответ при сбое списка":
+            payload["usage"] = {"prompt_tokens": 123, "completion_tokens": 17}
+        return FakeResponse(payload)
 
 
 def main():
@@ -79,20 +83,26 @@ def main():
             user_messages = page.locator(".message--user")
             answers = page.locator(".message--agent:not(.message--pending)")
             expect(question_input).to_be_enabled()
-            expect(page.locator("#token-preview")).to_contain_text("Контекст с резервом")
+            expect(page.locator("#token-preview")).to_contain_text("Контекст:")
+            expect(page.locator("#last-request-tokens")).to_have_text("Последний запрос в токенах: —")
+            expect(page.locator("#last-answer-tokens")).to_have_text("Последний ответ в токенах: —")
 
             def send_waiting(question, expected_users):
                 agent = next(iter(app.extensions["llm_agents"].values()))
-                question_tokens = agent.preview(question)["request_tokens_estimate"]
+                input_tokens = agent.preview(question)["input_tokens_estimate"]
                 question_input.fill(question)
                 page.locator("#send-button").click()
                 expect(user_messages).to_have_count(expected_users)
                 expect(user_messages.last).to_have_text(question)
                 expect(page.locator(".message--pending")).to_have_text("Модель готовит ответ…")
                 expect(question_input).to_be_disabled()
-                expect(page.locator("#context-breakdown")).to_contain_text(
-                    f"новый вопрос ≈{question_tokens}"
+                expect(page.locator("#token-preview")).to_contain_text(
+                    f"Контекст: ≈{input_tokens} из"
                 )
+                for _ in range(100):
+                    if pending:
+                        break
+                    page.wait_for_timeout(50)
                 assert len(pending) == 1
 
             send_waiting("Первый вопрос", 1)
@@ -105,6 +115,9 @@ def main():
             expect(user_messages).to_have_count(1)
             expect(page.locator(".message--pending")).to_have_count(0)
             expect(page.locator("#usage-totals")).to_contain_text("тарифы не заданы полностью")
+            expect(page.locator("#last-request-tokens")).to_have_text(re.compile(r"Последний запрос в токенах: ≈\d+"))
+            expect(page.locator("#last-answer-tokens")).to_have_text(re.compile(r"Последний ответ в токенах: ≈\d+"))
+            first_usage = page.locator(".last-turn-usage").inner_text()
 
             send_waiting("Сбой API", 2)
             respond(pending.pop())
@@ -113,6 +126,7 @@ def main():
             expect(user_messages).to_have_count(1)
             expect(answers).to_have_count(1)
             expect(page.locator(".message--pending")).to_have_count(0)
+            expect(page.locator(".last-turn-usage")).to_have_text(first_usage)
 
             page.locator("#context-window").fill("1")
             question_input.fill("Повтор после переполнения")
@@ -122,6 +136,8 @@ def main():
             expect(question_input).to_have_value("Повтор после переполнения")
             expect(question_input).to_be_enabled()
             expect(user_messages).to_have_count(1)
+            expect(page.locator(".metrics")).not_to_contain_text(re.compile("резерв", re.I))
+            expect(page.locator(".message--error").last).not_to_contain_text("резерв")
             page.locator("#context-window").fill("8192")
             send_waiting("Повтор после переполнения", 2)
             respond(pending.pop())
@@ -143,7 +159,9 @@ def main():
             expect(answers).to_have_count(3)
             expect(page.locator("#messages")).not_to_contain_text("</think>")
             expect(page.locator("#usage-rows tr")).to_have_count(3)
-            expect(page.locator("#token-preview")).to_contain_text("Контекст с резервом")
+            expect(page.locator("#token-preview")).to_contain_text("Контекст:")
+            expect(page.locator("#last-request-tokens")).to_have_text("Последний запрос в токенах: 123")
+            expect(page.locator("#last-answer-tokens")).to_have_text("Последний ответ в токенах: 17")
             screenshot("desktop")
             page.locator("summary").click()
             expect(page.locator("#token-details")).to_contain_text("Сохранённая история")

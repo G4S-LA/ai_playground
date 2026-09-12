@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -45,7 +44,7 @@ def main() -> None:
             api_key="demo", api_url="https://example.invalid/chat/completions",
             model="demo", system_prompt="Отвечай кратко.", temperature=0,
             timeout_seconds=10, database_path=str(Path(directory) / "demo.sqlite3"),
-            context_window_tokens=8192, max_output_tokens=32,
+            context_window_tokens=8192,
             input_price_per_million=1, output_price_per_million=2,
         )
         repository = ChatRepository(config.database_path)
@@ -77,9 +76,9 @@ def main() -> None:
         agent.reply("Продолжай")
         print("Увеличили окно до точной границы: повторная отправка прошла.")
 
-        print("\n2. Лимит генерации (смоделированный finish_reason=length):")
+        print("\n2. Лимит генерации API (смоделированный finish_reason=length):")
         short = SimpleAgent(
-            replace(config, max_output_tokens=2), repository.create_chat().id,
+            config, repository.create_chat().id,
             repository, DemoClient(DemoResponse("The answer", "length")),
         )
         print(f"Частичный ответ: {short.reply('Продолжай')!r}")

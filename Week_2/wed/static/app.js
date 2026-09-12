@@ -11,9 +11,11 @@ const tokenPreview = document.querySelector("#token-preview");
 const contextProgress = document.querySelector("#context-progress");
 const usageTotals = document.querySelector("#usage-totals");
 const usageRows = document.querySelector("#usage-rows");
-const outputBudget = document.querySelector("#output-budget");
+const lastRequestTokens = document.querySelector("#last-request-tokens");
+const lastAnswerTokens = document.querySelector("#last-answer-tokens");
 const contextBreakdown = document.querySelector("#context-breakdown");
 const tokenDetails = document.querySelector("#token-details");
+const contextOverflowMessage = "Переполнение контекста. Увеличьте лимит, сократите запрос или начните новый чат.";
 const number = new Intl.NumberFormat("ru-RU");
 let previewTimer;
 let previewVersion = 0;
@@ -25,7 +27,11 @@ function money(value) {
 function renderStatistics(stats) {
   const total = stats.totals;
   contextWindow.value = stats.context_window_tokens;
-  outputBudget.textContent = `Резерв на ответ: ${number.format(stats.max_output_tokens)} токенов`;
+  const lastTurn = stats.turns.at(-1);
+  lastRequestTokens.textContent = "Последний запрос в токенах: " + (lastTurn
+    ? `${lastTurn.input_source === "api" ? "" : "≈"}${number.format(lastTurn.input_tokens)}` : "—");
+  lastAnswerTokens.textContent = "Последний ответ в токенах: " + (lastTurn
+    ? `${lastTurn.output_source === "api" ? "" : "≈"}${number.format(lastTurn.output_tokens)}` : "—");
   let cost = `Стоимость по тарифам: $${money(total.known_cost_usd)}`;
   if (total.turn_count === 0) {
     cost = "Стоимость появится после ответа";
@@ -68,19 +74,15 @@ function renderStatistics(stats) {
 }
 
 function renderPreview(preview) {
-  tokenPreview.textContent = `Контекст с резервом: ≈${number.format(preview.required_tokens)} ` +
+  tokenPreview.textContent = `Контекст: ≈${number.format(preview.input_tokens_estimate)} ` +
     `из ${number.format(preview.context_window_tokens)} токенов`;
-  contextBreakdown.textContent = `Вход ≈${number.format(preview.input_tokens_estimate)} ` +
-    `(новый вопрос ≈${number.format(preview.request_tokens_estimate)}) + ` +
-    `резерв ответа ${number.format(preview.max_output_tokens)}. ` +
-    (preview.fits
-      ? `Свободно ≈${number.format(preview.context_window_tokens - preview.required_tokens)}.`
-      : `Переполнение на ≈${number.format(preview.required_tokens - preview.context_window_tokens)} токенов — отправка невозможна.`);
+  contextBreakdown.hidden = preview.fits;
+  contextBreakdown.textContent = preview.fits ? "" : contextOverflowMessage;
   tokenPreview.classList.toggle("is-overflow", !preview.fits);
   contextBreakdown.classList.toggle("is-overflow", !preview.fits);
   contextProgress.classList.toggle("is-overflow", !preview.fits);
   contextProgress.max = preview.context_window_tokens;
-  contextProgress.value = Math.min(preview.required_tokens, preview.context_window_tokens);
+  contextProgress.value = Math.min(preview.input_tokens_estimate, preview.context_window_tokens);
 }
 
 async function refreshPreview() {
@@ -174,7 +176,8 @@ async function requestJson(url, options = {}) {
   const response = await fetch(url, options);
   const result = await response.json();
   if (!response.ok) {
-    const error = new Error(result.error || "Не удалось выполнить запрос");
+    const error = new Error(result.code === "context_overflow"
+      ? contextOverflowMessage : result.error || "Не удалось выполнить запрос");
     error.preview = result.preview;
     throw error;
   }

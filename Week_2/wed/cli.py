@@ -128,8 +128,7 @@ def run_chat(
             print(
                 f"Вопрос ≈{preview['request_tokens_estimate']}; "
                 f"история ≈{preview['history_tokens_estimate']}; "
-                f"весь вход ≈{preview['input_tokens_estimate']} + "
-                f"резерв {preview['max_output_tokens']} / "
+                f"весь вход ≈{preview['input_tokens_estimate']} / "
                 f"окно {preview['context_window_tokens']}"
             )
             answer = agent.reply(user_request)
