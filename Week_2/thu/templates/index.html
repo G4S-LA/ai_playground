@@ -41,12 +41,18 @@
             <input id="keep-recent" type="number" min="2" step="2" value="10">
             <label for="summary-every">Сжимать каждые</label>
             <input id="summary-every" type="number" min="2" step="2" value="10">
+            <label class="summary-limit-control" for="summary-max-tokens">
+              Лимит summary, токены
+              <input id="summary-max-tokens" type="number" min="1" step="1" value="512"
+                title="Применяется при следующем обновлении summary">
+            </label>
           </div>
           <p id="compression-status" class="metrics-note" role="status"></p>
           <details id="summary-details">
             <summary>Резюме старой истории</summary>
             <p class="metrics-note">Обновляется перед ответом, когда накопится порог старых сообщений.
-              Свежие сообщения передаются дословно. Summary может упускать детали.</p>
+              Свежие сообщения передаются дословно. Summary может упускать детали.
+              Лимит summary применяется при следующем обновлении резюме.</p>
             <pre id="history-summary">Summary ещё не создано.</pre>
           </details>
           <p id="token-preview" role="status">Оценка контекста загружается…</p>

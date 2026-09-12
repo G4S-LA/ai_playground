@@ -9,10 +9,13 @@ class CompressionSettings:
     enabled: bool = True
     keep_recent_messages: int = 10
     summary_every_messages: int = 10
+    summary_max_tokens: int = 512
 
     def __post_init__(self) -> None:
         if type(self.enabled) is not bool:
             raise ValueError("Сжатие должно быть включено (true) или выключено (false)")
+        if type(self.summary_max_tokens) is not int or self.summary_max_tokens <= 0:
+            raise ValueError("Лимит summary должен быть положительным целым числом")
         for name in ("keep_recent_messages", "summary_every_messages"):
             value = getattr(self, name)
             if type(value) is not int or value < 2 or value % 2:

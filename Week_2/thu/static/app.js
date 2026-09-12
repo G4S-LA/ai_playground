@@ -10,6 +10,7 @@ const contextWindow = document.querySelector("#context-window");
 const compressionEnabled = document.querySelector("#compression-enabled");
 const keepRecent = document.querySelector("#keep-recent");
 const summaryEvery = document.querySelector("#summary-every");
+const summaryMaxTokens = document.querySelector("#summary-max-tokens");
 const compressionStatus = document.querySelector("#compression-status");
 const historySummary = document.querySelector("#history-summary");
 const compressionUsage = document.querySelector("#compression-usage");
@@ -36,6 +37,7 @@ function renderStatistics(stats) {
   compressionEnabled.checked = stats.compression.enabled;
   keepRecent.value = stats.compression.keep_recent_messages;
   summaryEvery.value = stats.compression.summary_every_messages;
+  summaryMaxTokens.value = stats.compression.summary_max_tokens;
   renderCompression(stats.compression);
   compressionUsage.textContent = `Сжатие: ${summaryTotal.turn_count} запросов, ` +
     `${summaryTotal.has_estimates ? "≈" : ""}${number.format(summaryTotal.total_tokens)} токенов; ` +
@@ -101,10 +103,17 @@ function renderCompression(state) {
 function compressionSettings() {
   const keep = Number(keepRecent.value);
   const every = Number(summaryEvery.value);
+  const maxTokens = Number(summaryMaxTokens.value);
+  if (!Number.isSafeInteger(maxTokens) || maxTokens <= 0) {
+    throw new Error("Лимит summary должен быть положительным целым числом.");
+  }
   if (![keep, every].every((value) => Number.isSafeInteger(value) && value >= 2 && value % 2 === 0)) {
     throw new Error("Число свежих сообщений и интервал сжатия должны быть чётными числами от 2.");
   }
-  return { enabled: compressionEnabled.checked, keep_recent_messages: keep, summary_every_messages: every };
+  return {
+    enabled: compressionEnabled.checked, keep_recent_messages: keep,
+    summary_every_messages: every, summary_max_tokens: maxTokens,
+  };
 }
 
 function renderPreview(preview) {
@@ -207,6 +216,7 @@ function setBusy(isBusy) {
   compressionEnabled.disabled = isBusy;
   keepRecent.disabled = isBusy;
   summaryEvery.disabled = isBusy;
+  summaryMaxTokens.disabled = isBusy;
   input.disabled = isBusy;
   sendButton.disabled = isBusy;
   newChatButton.disabled = isBusy;
@@ -353,6 +363,7 @@ contextWindow.addEventListener("input", schedulePreview);
 compressionEnabled.addEventListener("change", schedulePreview);
 keepRecent.addEventListener("input", schedulePreview);
 summaryEvery.addEventListener("input", schedulePreview);
+summaryMaxTokens.addEventListener("input", schedulePreview);
 
 newChatButton.addEventListener("click", createChat);
 

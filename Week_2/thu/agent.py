@@ -66,11 +66,12 @@ class AgentConfig:
 
     def __post_init__(self) -> None:
         try:
-            CompressionSettings(self.compression_enabled, self.keep_recent_messages, self.summary_every_messages)
+            CompressionSettings(
+                self.compression_enabled, self.keep_recent_messages,
+                self.summary_every_messages, self.summary_max_tokens,
+            )
         except ValueError as error:
             raise AgentError(str(error)) from error
-        if type(self.summary_max_tokens) is not int or self.summary_max_tokens <= 0:
-            raise AgentError("summary_max_tokens должен быть положительным целым числом")
         if type(self.context_window_tokens) is not int or self.context_window_tokens <= 0:
             raise AgentError("context_window_tokens должен быть положительным целым числом")
         for name in (
@@ -147,6 +148,7 @@ class SimpleAgent:
         self._context_window_tokens = config.context_window_tokens
         self._compression = CompressionSettings(
             config.compression_enabled, config.keep_recent_messages, config.summary_every_messages,
+            config.summary_max_tokens,
         )
         self._summary = ""
         self._covered = 0
@@ -194,7 +196,11 @@ class SimpleAgent:
         ]
         state = self._repository.load_context(self._chat_id)
         if state:
-            self._compression = CompressionSettings(**state["settings"])
+            # У старых чатов лимит был только в окружении, в JSON его ещё нет.
+            self._compression = CompressionSettings(**{
+                "summary_max_tokens": self._config.summary_max_tokens,
+                **state["settings"],
+            })
             self._summary = state["summary"]
             self._covered = state["summarized_messages"]
 
@@ -376,7 +382,10 @@ class SimpleAgent:
             end = self._covered
             request_messages = []
             for candidate in range(self._covered + 2, min(target, self._covered + self._compression.summary_every_messages) + 1, 2):
-                proposed = summary_request(self._summary, history[self._covered:candidate], self._config.summary_max_tokens)
+                proposed = summary_request(
+                    self._summary, history[self._covered:candidate],
+                    self._compression.summary_max_tokens,
+                )
                 if self._counter.messages(proposed) > self._context_window_tokens:
                     break
                 end, request_messages = candidate, proposed
@@ -386,8 +395,13 @@ class SimpleAgent:
             summary = self._extract_answer(data)
             if data["choices"][0].get("finish_reason") == "length" or not summary:
                 raise AgentError("Модель вернула оборванное или пустое summary. Повторите запрос.")
-            if self._counter.text(summary) > self._config.summary_max_tokens:
-                raise AgentError("Summary превысило LLM_SUMMARY_MAX_TOKENS. Увеличьте лимит summary или повторите запрос.")
+            summary_tokens = self._counter.text(summary)
+            if summary_tokens > self._compression.summary_max_tokens:
+                raise AgentError(
+                    f"Summary превысило лимит: ≈{summary_tokens} > "
+                    f"{self._compression.summary_max_tokens} токенов. "
+                    "Увеличьте «Лимит summary, токены» и повторите запрос."
+                )
             stats = {**self._usage_stats(data, request_messages), "summarized_messages": end}
             try:
                 self._repository.save_summary(

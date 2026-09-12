@@ -263,6 +263,77 @@ class CompressionTest(unittest.TestCase):
         self.assertIn("Расход сжатия:", output.getvalue())
         self.assertFalse(self.repository.load_context(self.chat.id)["settings"]["enabled"])
 
+    def test_web_summary_limit_can_be_increased_after_failure_without_restart(self):
+        before = self.seed(2)
+        summary = "Кодовое слово пользователя: маяк."
+        limit = TokenCounter().text(summary)
+        agent = self.make_agent([
+            response_with(summary), response_with(summary), response_with("Ответ"),
+        ])
+        client = create_app(self.config, self.repository, lambda *_: agent).test_client()
+        url = f"/api/chats/{self.chat.id}"
+        failed = client.post(f"{url}/messages", json={
+            "message": "Вопрос", "compression": {"summary_max_tokens": 1},
+        })
+        self.assertEqual(failed.status_code, 502)
+        self.assertIn(f"≈{limit} > 1 токенов", failed.json["error"])
+        self.assertIn("Лимит summary, токены", failed.json["error"])
+        self.assertEqual(self.repository.load_messages(self.chat.id), before)
+        self.assertEqual(agent.statistics()["compression"]["summary"], "")
+
+        preview = client.post(f"{url}/preview", json={
+            "message": "Вопрос", "compression": {"summary_max_tokens": limit},
+        })
+        self.assertEqual(preview.json["preview"]["compression"]["summary_max_tokens"], limit)
+        self.assertEqual(len(self.http.calls), 1)
+        accepted = client.post(f"{url}/messages", json={"message": "Вопрос"})
+        self.assertEqual(accepted.status_code, 200)
+        self.assertEqual(accepted.json["statistics"]["compression"]["summary"], summary)
+        self.assertEqual(len(self.http.calls), 3)
+        for index, requested_limit in enumerate((1, limit)):
+            prompt = self.http.calls[index]["json"]["messages"][0]["content"]
+            self.assertIn(f"Уложись в {requested_limit} токенов", prompt)
+
+        restarted_config = replace(self.config, summary_max_tokens=1024)
+        restarted = create_app(restarted_config, self.repository).test_client()
+        restored = restarted.get(f"{url}/messages").json["statistics"]["compression"]
+        self.assertEqual(restored["summary_max_tokens"], limit)
+        other = self.repository.create_chat()
+        other_state = restarted.get(f"/api/chats/{other.id}/messages").json["statistics"]["compression"]
+        self.assertEqual(other_state["summary_max_tokens"], 1024)
+
+    def test_legacy_settings_use_config_limit_and_changing_it_preserves_summary(self):
+        self.seed(2)
+        agent = self.make_agent([response_with("Сохранённое резюме"), response_with("Ответ")])
+        agent.reply("Вопрос")
+        old_state = self.repository.load_context(self.chat.id)
+        old_state["settings"].pop("summary_max_tokens")
+        self.repository.save_compression_settings(self.chat.id, old_state["settings"])
+        restarted = SimpleAgent(replace(self.config, summary_max_tokens=768), self.chat.id, self.repository)
+        self.assertEqual(restarted.statistics()["compression"]["summary_max_tokens"], 768)
+        restarted.set_compression(summary_max_tokens=1)
+        state = restarted.statistics()["compression"]
+        self.assertEqual(state["summary_max_tokens"], 1)
+        self.assertEqual(state["summary"], old_state["summary"])
+        self.assertEqual(state["summarized_messages"], old_state["summarized_messages"])
+        self.assertEqual(len(self.repository.load_messages(self.chat.id)), 6)
+
+    def test_invalid_summary_limits_do_not_change_settings_or_call_model(self):
+        agent = self.make_agent()
+        agent.set_compression(summary_max_tokens=640)
+        client = create_app(self.config, self.repository, lambda *_: agent).test_client()
+        before = self.repository.load_context(self.chat.id)
+        for endpoint in ("preview", "messages"):
+            for value in (0, -1, 1.5, True, False, None, "512"):
+                with self.subTest(endpoint=endpoint, value=value):
+                    response = client.post(f"/api/chats/{self.chat.id}/{endpoint}", json={
+                        "message": "Вопрос", "compression": {"summary_max_tokens": value},
+                    })
+                    self.assertEqual(response.status_code, 400)
+                    self.assertIn("Лимит summary", response.json["error"])
+        self.assertEqual(self.repository.load_context(self.chat.id), before)
+        self.assertEqual(self.http.calls, [])
+
 
 if __name__ == "__main__":
     unittest.main()
