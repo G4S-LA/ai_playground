@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Чаты LLM-агента</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <main class="workspace">
+      <aside class="sidebar">
+        <div class="brand">
+          <p class="eyebrow">Неделя 2 · Пятница</p>
+          <h1>Мои чаты</h1>
+        </div>
+        <button id="new-chat-button" class="new-chat-button" type="button">
+          + Новый чат
+        </button>
+        <nav id="chat-list" class="chat-list" aria-label="Сохранённые чаты"></nav>
+      </aside>
+
+      <section class="chat">
+        <header class="chat__header">
+          <div>
+            <h2 id="chat-title">Загрузка...</h2>
+            <p class="model">Модель: {{ model }}</p>
+          </div>
+          <div class="header-actions">
+          <button id="copy-button" class="secondary-button" type="button" title="Сохранить checkpoint и открыть независимую ветку">Копировать диалог</button>
+          <button id="delete-button" class="secondary-button" type="button">
+            Удалить чат
+          </button>
+          </div>
+        </header>
+
+        <section class="metrics" aria-label="Токены и стоимость">
+          <div class="budget-controls">
+            <label for="context-window">Лимит контекста, токены</label>
+            <input id="context-window" type="number" min="1" step="1" value="8192">
+          </div>
+          <div class="strategy-controls" role="group" aria-label="Стратегия управления контекстом">
+            <label class="strategy-toggle"><input type="radio" name="strategy" value="sliding_window" id="strategy-sliding" checked> Sliding Window</label>
+            <label class="strategy-toggle"><input type="radio" name="strategy" value="facts" id="strategy-facts"> Sticky Facts</label>
+          </div>
+          <div class="context-controls">
+            <label for="keep-recent">Последних сообщений N</label>
+            <input id="keep-recent" type="number" min="1" step="1" value="10">
+            <label for="facts-max-tokens">Лимит facts, токены</label>
+            <input id="facts-max-tokens" type="number" min="1" step="1" value="1024">
+          </div>
+          <p id="settings-status" class="metrics-note" role="status"></p>
+          <p id="branch-status" class="metrics-note"></p>
+          <details id="facts-details">
+            <summary>Facts · память диалога</summary>
+            <p class="metrics-note">Цели, ограничения, предпочтения и решения. Обновляются после каждого
+              принятого сообщения пользователя. Новый вопрос входит в N; facts передаются отдельно.</p>
+            <pre id="history-facts">{}</pre>
+          </details>
+          <details id="branch-details">
+            <summary>Branching · сохранённые точки</summary>
+            <p class="metrics-note">Копирование сохраняет точку и открывает ветку.
+              Из одной точки можно создать несколько веток; переключайтесь между ними в списке чатов.</p>
+            <button id="checkpoint-button" class="secondary-button" type="button">Сохранить checkpoint</button>
+            <div id="checkpoint-list"></div>
+          </details>
+          <p id="token-preview" role="status">Оценка контекста загружается…</p>
+          <progress id="context-progress" max="8192" value="0"
+            aria-label="Заполнение контекста" aria-describedby="token-preview context-breakdown"></progress>
+          <p id="context-breakdown" class="metrics-note" hidden></p>
+          <div class="last-turn-usage" aria-live="polite">
+            <p id="last-request-tokens">Последний запрос в токенах: —</p>
+            <p id="last-answer-tokens">Последний ответ в токенах: —</p>
+          </div>
+          <p id="usage-totals"></p>
+          <details>
+            <summary>Подробная статистика</summary>
+            <p id="token-details" class="metrics-note"></p>
+            <p class="metrics-note">В запросе: системная инструкция, facts при выбранном Sticky Facts
+              и последние N сообщений, включая новый вопрос. Старые реплики остаются только в архиве.
+              Расход обновления facts входит в общий расход. Скопированные ходы не оплачиваются повторно.</p>
+            <p id="facts-usage" class="metrics-note"></p>
+            <p class="metrics-note">≈ — локальная оценка, которая может отличаться от счёта провайдера.
+              Генерация включает ответ и рассуждения модели.</p>
+            <div class="usage-table-wrap">
+              <table>
+                <thead><tr><th>Ход</th><th>Вопрос ≈</th><th>История после ≈</th><th>Вход</th>
+                  <th>Генерация</th><th>Пропущено сообщений</th><th>Токены ∑</th><th>USD за ход</th><th>USD ∑</th></tr></thead>
+                <tbody id="usage-rows"></tbody>
+              </table>
+            </div>
+          </details>
+        </section>
+
+        <section id="messages" class="messages" aria-live="polite"></section>
+
+        <form id="chat-form" class="composer">
+          <label class="visually-hidden" for="message-input">Сообщение</label>
+          <textarea
+            id="message-input"
+            name="message"
+            rows="3"
+            maxlength="4000"
+            placeholder="Введите запрос..."
+            required
+          ></textarea>
+          <button id="send-button" class="primary-button" type="submit">
+            Отправить
+          </button>
+        </form>
+        <p class="hint">Enter — отправить, Shift+Enter — новая строка</p>
+      </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>
