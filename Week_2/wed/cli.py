@@ -131,6 +131,11 @@ def run_chat(
                 f"весь вход ≈{preview['input_tokens_estimate']} / "
                 f"окно {preview['context_window_tokens']}"
             )
+            if preview["fits"] and preview["omitted_history_messages"]:
+                print(
+                    f"Вне контекста: {preview['omitted_history_messages']} старых сообщений. "
+                    "Они сохранены в чате, но модель их не увидит."
+                )
             answer = agent.reply(user_request)
         except AgentError as error:
             print(f"Ошибка: {error}", file=sys.stderr)
@@ -152,6 +157,8 @@ def print_statistics(agent: SimpleAgent) -> None:
         )
         if last["warning"]:
             print(last["warning"])
+        if last.get("omitted_history_messages"):
+            print(f"В последнем запросе пропущено сообщений истории: {last['omitted_history_messages']}.")
     print(
         f"История ≈{stats['history_tokens_estimate']}; "
         f"расход всех учтённых ходов {'≈' if total['has_estimates'] else ''}"

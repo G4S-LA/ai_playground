@@ -173,6 +173,26 @@ class PersistentWebAppTest(unittest.TestCase):
                 self.assertEqual(response.status_code, 400)
         self.assertEqual(self.repository.load_messages(chat.id), [])
 
+    def test_sliding_window_sends_small_context_and_restores_full_chat(self):
+        chat = self.repository.create_chat()
+        url = f"/api/chats/{chat.id}"
+        # Минимальное окно узнаём до появления истории.
+        needed = self.client.post(f"{url}/preview", json={"message": "Привет"}).get_json()["preview"]["required_tokens"]
+        self.repository.append_turn(chat.id, "Старый вопрос", "Старый ответ")
+        preview = self.client.post(f"{url}/preview", json={
+            "message": "Привет", "context_window_tokens": needed,
+        }).get_json()["preview"]
+        self.assertTrue(preview["fits"])
+        self.assertEqual(preview["omitted_history_messages"], 2)
+        accepted = self.client.post(f"{url}/messages", json={"message": "Привет"})
+        self.assertEqual(accepted.status_code, 200)
+        turn = accepted.get_json()["statistics"]["turns"][0]
+        self.assertEqual(turn["input_tokens"], needed)
+        self.assertEqual(turn["omitted_history_messages"], 2)
+        restored = self.client.get(f"{url}/messages").get_json()
+        self.assertEqual(len(restored["messages"]), 4)
+        self.assertEqual(restored["messages"][0]["content"], "Старый вопрос")
+
     def test_saved_reasoning_prefix_is_not_returned_to_web_chat(self):
         chat = self.repository.create_chat()
         self.repository.append_turn(chat.id, "Вопрос", "</think>\nОтвет")

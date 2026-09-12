@@ -15,7 +15,7 @@ const lastRequestTokens = document.querySelector("#last-request-tokens");
 const lastAnswerTokens = document.querySelector("#last-answer-tokens");
 const contextBreakdown = document.querySelector("#context-breakdown");
 const tokenDetails = document.querySelector("#token-details");
-const contextOverflowMessage = "Переполнение контекста. Увеличьте лимит, сократите запрос или начните новый чат.";
+const contextOverflowMessage = "Переполнение контекста: инструкция и текущий вопрос не помещаются даже без истории. Увеличьте лимит или сократите вопрос либо инструкцию.";
 const number = new Intl.NumberFormat("ru-RU");
 let previewTimer;
 let previewVersion = 0;
@@ -61,6 +61,7 @@ function renderStatistics(stats) {
       turn.request_tokens_estimate, turn.history_after_tokens_estimate,
       `${turn.input_source === "api" ? "" : "≈"}${turn.input_tokens}`,
       `${turn.output_source === "api" ? "" : "≈"}${turn.output_tokens}`,
+      turn.omitted_history_messages ?? "—",
       `${estimatedTotal ? "≈" : ""}${cumulativeTokens}`, money(turn.cost_usd),
       incompleteCost ? `≥${money(cumulativeCost)}` : money(cumulativeCost),
     ];
@@ -76,8 +77,11 @@ function renderStatistics(stats) {
 function renderPreview(preview) {
   tokenPreview.textContent = `Контекст: ≈${number.format(preview.input_tokens_estimate)} ` +
     `из ${number.format(preview.context_window_tokens)} токенов`;
-  contextBreakdown.hidden = preview.fits;
-  contextBreakdown.textContent = preview.fits ? "" : contextOverflowMessage;
+  const omitted = preview.omitted_history_messages || 0;
+  contextBreakdown.hidden = preview.fits && omitted === 0;
+  contextBreakdown.textContent = !preview.fits ? contextOverflowMessage :
+    (omitted ? `Старых сообщений вне контекста: ${number.format(omitted)}. ` +
+      "Они сохранены в чате, но модель их не увидит." : "");
   tokenPreview.classList.toggle("is-overflow", !preview.fits);
   contextBreakdown.classList.toggle("is-overflow", !preview.fits);
   contextProgress.classList.toggle("is-overflow", !preview.fits);

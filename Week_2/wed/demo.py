@@ -50,8 +50,11 @@ def main() -> None:
         repository = ChatRepository(config.database_path)
         client = DemoClient(DemoResponse("История снова отправляется модели."))
         agent = SimpleAgent(config, repository.create_chat().id, repository, client)
-        print("Ход | Вопрос | История после | Вход | Ответ | Токены ∑ | USD/ход | USD ∑")
-        for index in range(1, 5):
+        print("После третьего хода уменьшаем окно до размера третьего входа.")
+        print("Ход | Вопрос | История после | Вход | Ответ | Вне окна | Токены ∑ | USD/ход | USD ∑")
+        for index in range(1, 7):
+            if index == 4:
+                agent.set_context_window(agent.last_turn["input_tokens_estimate"])
             agent.reply("Почему растёт расход?")
             turn = agent.last_turn
             total = agent.statistics()["totals"]
@@ -59,22 +62,25 @@ def main() -> None:
                 f"{index:3} | {turn['request_tokens_estimate']:6} | "
                 f"{turn['history_after_tokens_estimate']:13} | "
                 f"{turn['input_tokens']:4} | {turn['output_tokens']:5} | "
+                f"{turn['omitted_history_messages']:8} | "
                 f"{total['total_tokens']:8} | {turn['cost_usd']:.6f} | "
                 f"{total['known_cost_usd']:.6f}"
             )
 
+        print(f"В чате сохранены все {len(agent.history) - 1} сообщений; старые пары исключаются только из запроса.")
+        agent.set_context_window(1)
         needed = agent.preview("Продолжай")["required_tokens"]
         agent.set_context_window(needed - 1)
         before = client.call_count
-        print("\n1. Переполнение входного контекста:")
+        print("\n1. Инструкция и вопрос не помещаются даже без истории:")
         try:
             agent.reply("Продолжай")
         except ContextOverflowError as error:
             print(error)
-        print(f"Дополнительных HTTP-вызовов: {client.call_count - before}; сохранено ходов: 4.")
+        print(f"Дополнительных HTTP-вызовов: {client.call_count - before}; сохранено ходов: 6.")
         agent.set_context_window(needed)
         agent.reply("Продолжай")
-        print("Увеличили окно до точной границы: повторная отправка прошла.")
+        print("Увеличили окно до точной границы: запрос прошёл без старой истории.")
 
         print("\n2. Лимит генерации API (смоделированный finish_reason=length):")
         short = SimpleAgent(

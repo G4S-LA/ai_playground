@@ -11,6 +11,7 @@ from playwright.sync_api import sync_playwright, expect
 from agent import AgentConfig, SimpleAgent
 from chat_repository import ChatRepository
 from test_agent import FakeResponse, response_with
+from token_usage import TokenCounter
 from web import create_app
 
 
@@ -89,7 +90,9 @@ def main():
 
             def send_waiting(question, expected_users):
                 agent = next(iter(app.extensions["llm_agents"].values()))
-                input_tokens = agent.preview(question)["input_tokens_estimate"]
+                preview_agent = SimpleAgent(config, agent.chat_id, repository)
+                preview_agent.set_context_window(int(page.locator("#context-window").input_value()))
+                input_tokens = preview_agent.preview(question)["input_tokens_estimate"]
                 question_input.fill(question)
                 page.locator("#send-button").click()
                 expect(user_messages).to_have_count(expected_users)
@@ -145,7 +148,17 @@ def main():
             expect(question_input).to_be_enabled()
             expect(user_messages).to_have_count(2)
 
+            agent = next(iter(app.extensions["llm_agents"].values()))
+            history = repository.load_messages(agent.chat_id)
+            window_tokens = TokenCounter().messages([
+                agent.history[0], *history[-2:],
+                {"role": "user", "content": "Ответ при сбое списка"},
+            ])
+            page.locator("#context-window").fill(str(window_tokens))
+            question_input.fill("Ответ при сбое списка")
+            expect(page.locator("#context-breakdown")).to_contain_text("Старых сообщений вне контекста: 2")
             send_waiting("Ответ при сбое списка", 3)
+            screenshot("sliding")
             fail_chat_list = True
             respond(pending.pop())
             expect(question_input).to_be_enabled()
@@ -162,6 +175,7 @@ def main():
             expect(page.locator("#token-preview")).to_contain_text("Контекст:")
             expect(page.locator("#last-request-tokens")).to_have_text("Последний запрос в токенах: 123")
             expect(page.locator("#last-answer-tokens")).to_have_text("Последний ответ в токенах: 17")
+            expect(page.locator("#usage-rows tr").last.locator("td").nth(5)).to_have_text("2")
             screenshot("desktop")
             page.locator("summary").click()
             expect(page.locator("#token-details")).to_contain_text("Сохранённая история")

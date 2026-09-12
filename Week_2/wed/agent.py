@@ -24,8 +24,9 @@ class ContextOverflowError(AgentError):
         self.preview = preview
         super().__init__(
             "Переполнение локального контекста: "
-            f"вход ≈{preview['input_tokens_estimate']} > окно {preview['context_window_tokens']}. "
-            "Запрос не отправлен. Увеличьте окно, сократите сообщение или начните новый чат."
+            f"инструкция и текущий вопрос ≈{preview['input_tokens_estimate']} > "
+            f"окно {preview['context_window_tokens']}. "
+            "Даже без истории запрос не помещается. Увеличьте окно или сократите вопрос либо инструкцию."
         )
 
 
@@ -172,16 +173,39 @@ class SimpleAgent:
         ]
 
     def preview(self, user_request: str) -> dict[str, Any]:
+        _, preview = self._prepare_request(user_request)
+        return preview
+
+    def _prepare_request(self, user_request: str) -> tuple[list[dict[str, str]], dict[str, Any]]:
         self._reload_history()
         prompt = user_request.strip()
-        request_messages = [*self._messages, {"role": "user", "content": prompt}]
-        input_tokens = self._counter.messages(request_messages)
-        return {
+        history = self._messages[1:]
+        question = {"role": "user", "content": prompt}
+        input_tokens = self._counter.messages([self._messages[0], question])
+        # Репозиторий записывает целые пары user/assistant одной транзакцией.
+        # Общую обвязку начала ответа считаем один раз, в обязательной части.
+        reply_overhead = self._counter.messages([])
+        turn_tokens = [
+            self._counter.messages(history[index:index + 2]) - reply_overhead
+            for index in range(0, len(history), 2)
+        ]
+        full_input_tokens = input_tokens + sum(turn_tokens)
+        start = len(history)
+        for index in range(len(turn_tokens) - 1, -1, -1):
+            if input_tokens + turn_tokens[index] > self._context_window_tokens:
+                break
+            input_tokens += turn_tokens[index]
+            start = index * 2
+        request_messages = [self._messages[0], *history[start:], question]
+        return request_messages, {
             "request_tokens_estimate": self._counter.text(prompt),
             "history_tokens_estimate": sum(
                 self._counter.text(message["content"]) for message in self._messages[1:]
             ),
             "input_tokens_estimate": input_tokens,
+            "full_input_tokens_estimate": full_input_tokens,
+            "included_history_messages": len(history) - start,
+            "omitted_history_messages": start,
             "context_window_tokens": self._context_window_tokens,
             "required_tokens": input_tokens,
             "fits": input_tokens <= self._context_window_tokens,
@@ -220,14 +244,9 @@ class SimpleAgent:
         if not prompt:
             raise AgentError("Запрос не должен быть пустым")
 
-        preview = self.preview(prompt)
+        request_messages, preview = self._prepare_request(prompt)
         if not preview["fits"]:
             raise ContextOverflowError(preview)
-
-        request_messages = [
-            *(message.copy() for message in self._messages),
-            {"role": "user", "content": prompt},
-        ]
 
         try:
             response = self._http_client.post(
