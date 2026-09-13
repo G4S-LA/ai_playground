@@ -378,10 +378,7 @@ textarea:focus {
 .strategy-toggle:has(input:checked) { background: #ede9fe; outline: 1px solid #8b5cf6; }
 .strategy-toggle:has(input:disabled) { opacity: 0.65; cursor: not-allowed; }
 input:disabled { color: #667085; background: #f1f3f7; cursor: not-allowed; }
-#checkpoint-list { display: grid; gap: 8px; margin: 8px 0; }
-.checkpoint-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.checkpoint-row span { overflow-wrap: anywhere; }
-#facts-details, #branch-details { margin: 8px 0; }
+#facts-details { margin: 8px 0; }
 #facts-max-tokens { width: 80px; }
 @media (max-width: 760px) {
   .chat__header { padding-top: 12px; padding-bottom: 12px; gap: 8px; }

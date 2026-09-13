@@ -75,21 +75,23 @@ def main():
             expect(page.locator("#chat-title")).to_contain_text("Ветка:")
             expect(question).to_be_enabled()
             send("Кодовое слово: север", 4)
-            page.locator("#branch-details > summary").click()
-            page.locator("#checkpoint-list button").first.click()
-            expect(page.locator("#chat-title")).to_have_text("Новая ветка")
+            source_title = repository.get_chat(source_id).title
+            page.locator("#chat-list button").filter(has_text=source_title).last.click()
+            expect(page.locator("#chat-title")).to_have_text(source_title)
+            expect(question).to_be_enabled()
+            page.locator("#copy-button").click()
+            expect(page.locator("#chat-title")).to_contain_text("Ветка:")
             expect(question).to_be_enabled()
             expect(page.locator(".message--user")).to_have_count(3)
             send("Кодовое слово: юг", 4)
             send("Какое кодовое слово?", 5)
             expect(page.locator(".message--agent").last).to_have_text("юг")
 
-            page.locator("#chat-list button", has_text="Ветка:").click()
+            page.locator("#chat-list button", has_text="Ветка:").filter(has_text="· 8").click()
             expect(page.locator("#chat-title")).to_contain_text("Ветка:")
             expect(question).to_be_enabled()
             send("Какое кодовое слово?", 5)
             expect(page.locator(".message--agent").last).to_have_text("север")
-            source_title = repository.get_chat(source_id).title
             page.locator("#chat-list button").filter(has_text=source_title).last.click()
             expect(page.locator("#chat-title")).to_have_text(source_title)
             expect(question).to_be_enabled()
@@ -130,7 +132,7 @@ def main():
                     page.screenshot(path=str(options.screenshots_dir / f"strategies-{width}.png"))
             assert not errors, errors
             browser.close()
-            print("Browser OK: Sliding Window, Sticky Facts, две ветки из checkpoint, переключение, блокировка, перезапуск, mobile.")
+            print("Browser OK: Sliding Window, Sticky Facts, две копии диалога, переключение, блокировка, перезапуск, mobile.")
 
 
 if __name__ == "__main__":

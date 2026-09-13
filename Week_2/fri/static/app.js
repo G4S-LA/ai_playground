@@ -55,8 +55,7 @@ function updateControls() {
   $("#new-chat-button").disabled = busy;
   $("#delete-button").disabled = unavailable;
   $("#copy-button").disabled = unavailable || !currentState.message_count;
-  $("#checkpoint-button").disabled = unavailable || !currentState.message_count;
-  for (const button of document.querySelectorAll("#chat-list button, #checkpoint-list button")) button.disabled = busy;
+  for (const button of document.querySelectorAll("#chat-list button")) button.disabled = busy;
 }
 
 function setBusy(value) {
@@ -199,25 +198,6 @@ async function refreshChats() {
   }
 }
 
-function renderCheckpoints(points) {
-  $("#checkpoint-list").replaceChildren();
-  for (const point of points) {
-    const row = document.createElement("div");
-    row.className = "checkpoint-row";
-    const label = document.createElement("span");
-    label.textContent = `${point.title} · ${point.message_count} сообщ. · ${point.id.slice(0, 8)}`;
-    const button = document.createElement("button");
-    button.className = "secondary-button";
-    button.textContent = "Создать ветку";
-    button.addEventListener("click", () => runAction(async () => {
-      const result = await requestJson(`/api/checkpoints/${encodeURIComponent(point.id)}/branches`, jsonOptions("POST", {}));
-      await selectChat(result.chat.id);
-    }));
-    row.append(label, button);
-    $("#checkpoint-list").appendChild(row);
-  }
-}
-
 async function selectChat(id) {
   await settingsQueue.catch(() => {});
   const result = await requestJson(`${chatUrl(id)}/messages`);
@@ -226,13 +206,11 @@ async function selectChat(id) {
   input.value = "";
   $("#chat-title").textContent = result.chat.title;
   $("#branch-status").textContent = result.chat.checkpoint_id
-    ? `Ветка из checkpoint ${result.chat.checkpoint_id.slice(0, 8)}. Продолжение независимо от исходного чата.` : "";
+    ? "Копия диалога. Продолжение независимо от исходного чата." : "";
   renderMessages(result.messages);
   renderStatistics(result.statistics);
-  renderCheckpoints(result.checkpoints);
   if (changedChat) {
     $("#facts-details").open = false;
-    $("#branch-details").open = false;
     $(".metrics").scrollTop = 0;
   }
   if (result.statistics.turns.at(-1)?.warning) addMessage("error", result.statistics.turns.at(-1).warning);
@@ -255,14 +233,8 @@ $("#copy-button").addEventListener("click", () => runAction(async () => {
   const result = await requestJson(`${chatUrl()}/copy`, jsonOptions("POST", {}));
   await selectChat(result.chat.id);
 }));
-$("#checkpoint-button").addEventListener("click", () => runAction(async () => {
-  await requestJson(`${chatUrl()}/checkpoints`, jsonOptions("POST", {}));
-  const draft = input.value;
-  await selectChat(currentChatId);
-  input.value = draft;
-}));
 $("#delete-button").addEventListener("click", () => {
-  if (!window.confirm("Удалить текущий чат? Другие ветки и checkpoints сохранятся.")) return;
+  if (!window.confirm("Удалить текущий чат? Другие диалоги и их копии сохранятся.")) return;
   runAction(async () => {
     await settingsQueue.catch(() => {});
     await requestJson(chatUrl(), {method: "DELETE"});

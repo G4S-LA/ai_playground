@@ -26,7 +26,7 @@
             <p class="model">Модель: {{ model }}</p>
           </div>
           <div class="header-actions">
-          <button id="copy-button" class="secondary-button" type="button" title="Сохранить checkpoint и открыть независимую ветку">Копировать диалог</button>
+          <button id="copy-button" class="secondary-button" type="button" title="Создать независимую копию диалога">Копировать диалог</button>
           <button id="delete-button" class="secondary-button" type="button">
             Удалить чат
           </button>
@@ -55,13 +55,6 @@
             <p class="metrics-note">Цели, ограничения, предпочтения и решения. Обновляются после каждого
               принятого сообщения пользователя. Новый вопрос входит в N; facts передаются отдельно.</p>
             <pre id="history-facts">{}</pre>
-          </details>
-          <details id="branch-details">
-            <summary>Branching · сохранённые точки</summary>
-            <p class="metrics-note">Копирование сохраняет точку и открывает ветку.
-              Из одной точки можно создать несколько веток; переключайтесь между ними в списке чатов.</p>
-            <button id="checkpoint-button" class="secondary-button" type="button">Сохранить checkpoint</button>
-            <div id="checkpoint-list"></div>
           </details>
           <p id="token-preview" role="status">Оценка контекста загружается…</p>
           <progress id="context-progress" max="8192" value="0"
