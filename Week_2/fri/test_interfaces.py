@@ -67,6 +67,29 @@ class WebTest(Fixture):
         self.assertTrue(response.json["statistics"]["context"]["settings_locked"])
         self.assertEqual(self.llm.calls, [])
 
+    def test_facts_are_repaired_within_one_web_request(self):
+        self.client.patch(self.url + "/settings", json={"strategy":"facts"})
+        self.llm.responses = ['{"age":30}', '{"age":"30"}', "Запомнил"]
+        response = self.client.post(self.url + "/messages", json={"message":"Мне 30"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["answer"], "Запомнил")
+        self.assertEqual(response.json["statistics"]["context"]["facts"], {"age":"30"})
+        self.assertEqual(response.json["statistics"]["facts_totals"]["total_tokens"], 240)
+        self.assertEqual(len(self.llm.calls), 3)
+        self.assertEqual(len(response.json["messages"]), 2)
+
+    def test_exhausted_facts_repairs_return_error_and_usage_to_web(self):
+        self.client.patch(self.url + "/settings", json={"strategy":"facts"})
+        self.llm.responses = ['{"age":30}'] * 4
+        response = self.client.post(self.url + "/messages", json={"message":"Мне 30"})
+        self.assertEqual(response.status_code, 502)
+        self.assertIn("после 3 попыток исправления", response.json["error"])
+        self.assertIn('facts["age"]', response.json["error"])
+        self.assertEqual(response.json["statistics"]["facts_totals"]["total_tokens"], 480)
+        self.assertTrue(response.json["statistics"]["context"]["settings_locked"])
+        self.assertEqual(self.repo.load_messages(self.chat_id), [])
+        self.assertEqual(len(self.llm.calls), 4)
+
 
 class CliTest(Fixture):
     @patch("builtins.print")

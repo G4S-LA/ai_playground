@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from agent import AgentConfig, AgentError, ContextOverflowError, SimpleAgent
 from chat_repository import ChatRepository, ConversationChangedError, SettingsLockedError
-from context_strategies import ContextSettings
+from context_strategies import ContextSettings, parse_facts
 
 
 class FakeResponse:
@@ -123,13 +123,14 @@ class StrategiesTest(Fixture):
         for response in ['[]', '{"key": 1}', '{"key": null}', 'not json',
                          FakeResponse('{"key":"new"}', "length"), '{"key":"' + "word " * 100 + '"}']:
             with self.subTest(response=response):
-                agent, client = self.make_agent(['{"key":"old"}', 'ok', response], strategy="facts", facts_max_tokens=20)
+                agent, client = self.make_agent(['{"key":"old"}', 'ok', *([response] * 4)], strategy="facts", facts_max_tokens=20)
                 agent.reply("first")
-                with self.assertRaises(AgentError):
+                with self.assertRaisesRegex(AgentError, "после 3 попыток исправления"):
                     agent.reply("second")
                 self.assertEqual(agent.statistics()["context"]["facts"], {"key": "old"})
                 self.assertEqual(len(self.repo.load_messages(agent.chat_id)), 2)
-                self.assertEqual(len(client.calls), 3)
+                self.assertEqual(len(client.calls), 6)
+                self.assertEqual(agent.statistics()["facts_totals"]["turn_count"], 5)
 
     def test_blank_facts_object_is_valid(self):
         agent, _ = self.make_agent(['{}', 'hello'], strategy="facts")
@@ -234,6 +235,127 @@ class BranchingTest(Fixture):
         self.assertEqual(self.repo.load_messages(copied.id), self.repo.load_messages(source.chat_id))
         self.assertEqual(self.repo.load_state(copied.id)["settings"], self.repo.load_state(source.chat_id)["settings"])
         self.assertEqual(self.repo.list_checkpoints(copied.id)[0]["id"], copied.checkpoint_id)
+
+
+class FactsValidationTest(unittest.TestCase):
+    def test_reports_all_fields_and_expected_types(self):
+        with self.assertRaises(ValueError) as caught:
+            parse_facts('{"age":30,"active":false,"city":" ","languages":[],"goal":null}')
+        error = str(caught.exception)
+        for key, expected in (("age", "number"), ("active", "boolean"), ("city", "пробелов"),
+                              ("languages", "array"), ("goal", "null")):
+            self.assertTrue(any(f'facts["{key}"]' in line and expected in line for line in error.splitlines()), error)
+
+    def test_reports_syntax_position_root_type_and_invalid_keys(self):
+        for raw, message in (('{\n"city":}', "строка 2, столбец 8"),
+                             ('[]', "получен тип array"), ('"text"', "получен тип string"),
+                             ('{" ":"text"}', "ключ не должен быть пустым"),
+                             (json.dumps({"k" * 129:"text"}), "длина ключа 129")):
+            with self.subTest(raw=raw), self.assertRaisesRegex(ValueError, message):
+                parse_facts(raw)
+
+
+class FactsRepairTest(Fixture):
+    def test_stops_on_first_success_up_to_the_third_repair(self):
+        invalid = ['{"age":30}', '{"age":false}', '[]']
+        for repairs in (1, 2, 3):
+            with self.subTest(repairs=repairs):
+                agent, client = self.make_agent([*invalid[:repairs], '{"age":"30"}', 'answer'], strategy="facts")
+                self.assertEqual(agent.reply("Мне 30"), "answer")
+                self.assertEqual(len(client.calls), repairs + 2)
+                for index in range(1, repairs + 1):
+                    payload = json.loads(client.calls[index][1]["content"])
+                    self.assertEqual(payload["repair"]["attempt"], index)
+                    self.assertEqual(payload["repair"]["previous_response"], invalid[index - 1])
+                    self.assertEqual(payload["facts"], {})
+                    self.assertEqual(payload["recent_messages"], [{"role":"user", "content":"Мне 30"}])
+                    with self.assertRaises(ValueError) as caught:
+                        parse_facts(invalid[index - 1])
+                    self.assertEqual(payload["repair"]["validation_error"], str(caught.exception))
+                stats = agent.statistics()
+                self.assertEqual(stats["context"]["facts"], {"age":"30"})
+                self.assertEqual(stats["context"]["message_count"], 2)
+                self.assertEqual(stats["overall_totals"]["total_tokens"], 120 * (repairs + 2))
+                self.assertEqual([item["repair_attempt"] for item in stats["facts_calls"]], list(range(repairs + 1)))
+                self.assertIsNone(stats["facts_calls"][-1]["validation_error"])
+                self.assertTrue(all(item["validation_error"] for item in stats["facts_calls"][:-1]))
+                self.assertIn('"age": "30"', client.calls[-1][1]["content"])
+                self.assertNotIn("repair", json.dumps(client.calls[-1]))
+
+    def test_exhaustion_stops_after_initial_response_and_three_repairs(self):
+        agent, client = self.make_agent(['not json', '[]', '{"city":false}', '{"city":42}'], strategy="facts")
+        with self.assertRaisesRegex(AgentError, "после 3 попыток исправления") as caught:
+            agent.reply("Город Москва")
+        self.assertIn('facts["city"]', str(caught.exception))
+        self.assertIn("number", str(caught.exception))
+        self.assertEqual(len(client.calls), 4)
+        self.assertEqual(agent.statistics()["overall_totals"]["total_tokens"], 480)
+        self.assertEqual(agent.statistics()["turns"], [])
+        self.assertEqual(self.repo.load_state(agent.chat_id)["facts"], {})
+        self.assertEqual(self.repo.load_messages(agent.chat_id), [])
+
+    def test_original_memory_is_kept_in_repairs_and_budget_resets_each_turn(self):
+        agent, client = self.make_agent([
+            '{"goal":"launch"}', 'ok',
+            '{"city":30}', '{"goal":"launch","city":"Москва"}', 'ok',
+            '{"city":false}', '{"goal":"launch","city":"Казань"}', 'ok',
+        ], strategy="facts", keep_recent_messages=3)
+        agent.reply("Цель — запуск")
+        agent.reply("Город Москва")
+        agent.reply("Теперь Казань")
+        repair = json.loads(client.calls[3][1]["content"])
+        self.assertEqual(repair["facts"], {"goal":"launch"})
+        self.assertEqual(repair["recent_messages"][-1]["content"], "Город Москва")
+        self.assertEqual(json.loads(client.calls[6][1]["content"])["repair"]["attempt"], 1)
+        self.assertEqual(agent.statistics()["context"]["facts"], {"goal":"launch", "city":"Казань"})
+
+    def test_empty_truncated_and_oversized_results_can_be_repaired(self):
+        for response, expected in (("", "Пустой ответ"), (None, "Пустой ответ"),
+                                   (FakeResponse('{"city":"Москва"}', "length"), "оборван"),
+                                   ('{"note":"' + "word " * 100 + '"}', "лимит токенов")):
+            with self.subTest(response=response):
+                agent, client = self.make_agent([response, '{"city":"Москва"}', 'ok'], strategy="facts", facts_max_tokens=20)
+                agent.reply("Город Москва")
+                self.assertEqual(len(client.calls), 3)
+                self.assertIn(expected, json.loads(client.calls[1][1]["content"])["repair"]["validation_error"])
+                self.assertEqual(agent.statistics()["context"]["facts"], {"city":"Москва"})
+
+    def test_repair_request_is_checked_against_context_window(self):
+        agent, client = self.make_agent(['x ' * 1500], strategy="facts", context_window_tokens=1000)
+        with self.assertRaisesRegex(AgentError, "Запрос исправления facts не помещается"):
+            agent.reply("hello")
+        self.assertEqual(len(client.calls), 1)
+        self.assertEqual(agent.statistics()["facts_totals"]["turn_count"], 1)
+        self.assertEqual(self.repo.load_state(agent.chat_id)["facts"], {})
+
+    def test_network_and_api_errors_do_not_trigger_format_repairs(self):
+        import requests
+        http_error = FakeResponse("unavailable")
+        http_error.ok, http_error.status_code, http_error.text = False, 503, "unavailable"
+        for response in (requests.ConnectionError("offline"), requests.Timeout("timeout"), http_error):
+            with self.subTest(response=response):
+                agent, client = self.make_agent([response], strategy="facts")
+                with self.assertRaises(AgentError):
+                    agent.reply("hello")
+                self.assertEqual(len(client.calls), 1)
+                self.assertEqual(agent.statistics()["facts_totals"]["turn_count"], 0)
+
+    def test_main_failure_does_not_commit_repaired_facts(self):
+        import requests
+        agent, client = self.make_agent(['{"city":123}', '{"city":"Москва"}', requests.ConnectionError("offline")], strategy="facts")
+        with self.assertRaises(AgentError):
+            agent.reply("Город Москва")
+        self.assertEqual(len(client.calls), 3)
+        self.assertEqual(self.repo.load_state(agent.chat_id)["facts"], {})
+        self.assertEqual(self.repo.load_messages(agent.chat_id), [])
+        self.assertEqual(agent.statistics()["facts_totals"]["total_tokens"], 240)
+
+    def test_empty_main_answer_is_not_repaired_as_facts(self):
+        agent, client = self.make_agent(['{}', ''], strategy="facts")
+        with self.assertRaisesRegex(AgentError, "пустой ответ"):
+            agent.reply("hello")
+        self.assertEqual(len(client.calls), 2)
+        self.assertEqual(self.repo.load_messages(agent.chat_id), [])
 
 
 if __name__ == "__main__":

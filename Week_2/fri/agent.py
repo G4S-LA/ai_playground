@@ -11,9 +11,13 @@ from typing import Any, Protocol
 import requests
 
 from chat_repository import ChatRepository
-from context_strategies import ContextSettings, STRATEGIES, facts_json, facts_request, parse_facts
+from context_strategies import (ContextSettings, STRATEGIES, facts_json, facts_request,
+                                facts_repair_request, parse_facts)
 from model_output import visible_answer
 from token_usage import TokenCounter, completion_usage, cost_usd, totals
+
+
+MAX_FACTS_REPAIR_ATTEMPTS = 3
 
 
 class AgentError(RuntimeError):
@@ -231,23 +235,7 @@ class SimpleAgent:
         facts = state["facts"]
         if settings.strategy == "facts":
             recent = [*state["messages"], {"role": "user", "content": prompt}][-settings.keep_recent_messages:]
-            update = facts_request(facts, recent, settings.facts_max_tokens)
-            update_tokens = self._counter.messages(update)
-            if update_tokens > settings.context_window_tokens:
-                raise AgentError(f"Запрос обновления facts не помещается в окно: ≈{update_tokens} > "
-                                 f"{settings.context_window_tokens}. Сократите вопрос или создайте чат с большим окном.")
-            data = self._complete(update, temperature=0)
-            # Учёт вызова сохраняется даже при невалидных facts или сбое основного ответа.
-            self._repository.save_facts_call(self.chat_id, self._usage_stats(data, update))
-            raw_facts = self._extract_answer(data)
-            if data["choices"][0].get("finish_reason") == "length":
-                raise AgentError("Модель вернула оборванные facts. Повторите запрос.")
-            try:
-                facts = parse_facts(raw_facts)
-            except ValueError as error:
-                raise AgentError(f"Модель вернула невалидные facts: {error}") from error
-            if self._counter.text(facts_json(facts)) > settings.facts_max_tokens:
-                raise AgentError("Facts превысили лимит токенов. Повторите запрос или создайте чат с большим лимитом.")
+            facts = self._update_facts(facts, recent, settings)
 
         request_messages, preview = self._prepare_request(prompt, state, facts)
         if not preview["fits"]:
@@ -271,7 +259,47 @@ class SimpleAgent:
         self.last_turn = stats
         return answer
 
-    def _complete(self, request_messages: list[dict[str, str]], *, temperature: float | None = None) -> dict:
+    def _update_facts(self, saved_facts: dict[str, str], recent: list[dict], settings: ContextSettings) -> dict[str, str]:
+        update = facts_request(saved_facts, recent, settings.facts_max_tokens)
+        for repair_attempt in range(MAX_FACTS_REPAIR_ATTEMPTS + 1):
+            update_tokens = self._counter.messages(update)
+            if update_tokens > settings.context_window_tokens:
+                operation = "исправления" if repair_attempt else "обновления"
+                raise AgentError(f"Запрос {operation} facts не помещается в окно: ≈{update_tokens} > "
+                                 f"{settings.context_window_tokens}. Сократите вопрос или создайте чат с большим окном.")
+            data = self._complete(update, temperature=0, allow_empty=True)
+            raw_facts = self._extract_answer(data, allow_empty=True)
+            validation_error = None
+            try:
+                if data["choices"][0].get("finish_reason") == "length":
+                    raise ValueError("Ответ с facts оборван (finish_reason=length). Нужен полный JSON-объект.")
+                facts = parse_facts(raw_facts)
+                facts_tokens = self._counter.text(facts_json(facts))
+                if facts_tokens > settings.facts_max_tokens:
+                    raise ValueError(f"Facts превысили лимит токенов: ≈{facts_tokens} > {settings.facts_max_tokens}.")
+            except ValueError as error:
+                validation_error = str(error)
+
+            # Учитываем каждый полученный ответ, даже невалидный. Ошибочные
+            # варианты facts остаются только в запросах исправления, вне истории.
+            self._repository.save_facts_call(self.chat_id, {
+                **self._usage_stats(data, update), "repair_attempt": repair_attempt,
+                "validation_error": validation_error,
+            })
+            if validation_error is None:
+                return facts
+            if repair_attempt == MAX_FACTS_REPAIR_ATTEMPTS:
+                raise AgentError(
+                    f"Модель вернула невалидные facts после {MAX_FACTS_REPAIR_ATTEMPTS} попыток исправления. "
+                    f"Последняя ошибка: {validation_error}"
+                )
+            # Каждая правка получает исходные данные и только последний результат:
+            # предыдущие неудачные варианты не накапливаются в контексте.
+            update = facts_repair_request(saved_facts, recent, settings.facts_max_tokens,
+                                          raw_facts, validation_error, repair_attempt + 1)
+
+    def _complete(self, request_messages: list[dict[str, str]], *, temperature: float | None = None,
+                  allow_empty: bool = False) -> dict:
         try:
             response = self._http_client.post(
                 self._config.api_url,
@@ -300,7 +328,7 @@ class SimpleAgent:
         except ValueError as error:
             raise AgentError("LLM API вернул невалидный JSON") from error
 
-        self._extract_answer(data)
+        self._extract_answer(data, allow_empty=allow_empty)
         return data
 
     def _usage_stats(self, data: dict, request_messages: list[dict[str, str]]) -> dict:
@@ -335,19 +363,19 @@ class SimpleAgent:
         }
 
     @staticmethod
-    def _extract_answer(data: Any) -> str:
+    def _extract_answer(data: Any, *, allow_empty: bool = False) -> str:
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as error:
             raise AgentError("LLM API вернул ответ в неожиданном формате") from error
 
         truncated = data["choices"][0].get("finish_reason") == "length"
-        if content is None and truncated:
+        if content is None and (truncated or allow_empty):
             return ""
         if not isinstance(content, str):
             raise AgentError("LLM API вернул пустой ответ")
         answer = visible_answer(content)
-        if not answer and not truncated:
+        if not answer and not truncated and not allow_empty:
             raise AgentError("LLM API вернул пустой ответ после удаления служебного блока")
         return answer
 
