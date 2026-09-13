@@ -123,13 +123,20 @@ def main():
             expect(page.locator(".message--user")).to_have_count(3)
             expect(question).to_be_enabled()
             expect(page.locator("#token-preview")).to_contain_text("Контекст:")
-            for width, height in ((1440, 1000), (390, 844)):
+            for width, height in ((1440, 1000), (1024, 900), (820, 900), (390, 844)):
                 page.set_viewport_size({"width":width, "height":height})
+                page.evaluate("window.scrollTo(0, 0)")
+                chat = page.locator(".chat").bounding_box()
+                settings = page.locator(".settings-panel").bounding_box()
+                if width > 760:
+                    assert settings["x"] >= chat["x"] + chat["width"], (chat, settings)
+                else:
+                    assert settings["y"] >= chat["y"] + chat["height"], (chat, settings)
                 composer = page.locator("#chat-form").bounding_box()
                 assert composer["y"] + composer["height"] <= height, composer
                 assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
                 if options.screenshots_dir:
-                    page.screenshot(path=str(options.screenshots_dir / f"strategies-{width}.png"))
+                    page.screenshot(path=str(options.screenshots_dir / f"strategies-{width}.png"), full_page=True)
             assert not errors, errors
             browser.close()
             print("Browser OK: Sliding Window, Sticky Facts, две копии диалога, переключение, блокировка, перезапуск, mobile.")

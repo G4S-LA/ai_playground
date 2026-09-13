@@ -8,7 +8,7 @@
   </head>
   <body>
     <main class="workspace">
-      <aside class="sidebar">
+      <aside class="sidebar chats-sidebar">
         <div class="brand">
           <p class="eyebrow">Неделя 2 · Пятница</p>
           <h1>Мои чаты</h1>
@@ -26,14 +26,38 @@
             <p class="model">Модель: {{ model }}</p>
           </div>
           <div class="header-actions">
-          <button id="copy-button" class="secondary-button" type="button" title="Создать независимую копию диалога">Копировать диалог</button>
-          <button id="delete-button" class="secondary-button" type="button">
-            Удалить чат
-          </button>
+            <button id="copy-button" class="secondary-button" type="button" title="Создать независимую копию диалога">Копировать диалог</button>
+            <button id="delete-button" class="secondary-button" type="button">
+              Удалить чат
+            </button>
           </div>
         </header>
 
-        <section class="metrics" aria-label="Токены и стоимость">
+        <section id="messages" class="messages" aria-live="polite"></section>
+
+        <form id="chat-form" class="composer">
+          <label class="visually-hidden" for="message-input">Сообщение</label>
+          <textarea
+            id="message-input"
+            name="message"
+            rows="3"
+            maxlength="4000"
+            placeholder="Введите запрос..."
+            required
+          ></textarea>
+          <button id="send-button" class="primary-button" type="submit">
+            Отправить
+          </button>
+        </form>
+        <p class="hint">Enter — отправить, Shift+Enter — новая строка</p>
+      </section>
+
+      <aside class="sidebar settings-panel metrics" aria-labelledby="settings-title">
+        <div class="brand">
+          <p class="eyebrow">Текущий диалог</p>
+          <h2 id="settings-title">Настройки чата</h2>
+        </div>
+        <section class="settings-controls" aria-label="Параметры контекста">
           <div class="budget-controls">
             <label for="context-window">Лимит контекста, токены</label>
             <input id="context-window" type="number" min="1" step="1" value="8192">
@@ -49,6 +73,9 @@
             <input id="facts-max-tokens" type="number" min="1" step="1" value="1024">
           </div>
           <p id="settings-status" class="metrics-note" role="status"></p>
+        </section>
+        <div class="context-metrics">
+          <h3>Контекст и расход</h3>
           <p id="branch-status" class="metrics-note"></p>
           <details id="facts-details">
             <summary>Facts · память диалога</summary>
@@ -82,26 +109,8 @@
               </table>
             </div>
           </details>
-        </section>
-
-        <section id="messages" class="messages" aria-live="polite"></section>
-
-        <form id="chat-form" class="composer">
-          <label class="visually-hidden" for="message-input">Сообщение</label>
-          <textarea
-            id="message-input"
-            name="message"
-            rows="3"
-            maxlength="4000"
-            placeholder="Введите запрос..."
-            required
-          ></textarea>
-          <button id="send-button" class="primary-button" type="submit">
-            Отправить
-          </button>
-        </form>
-        <p class="hint">Enter — отправить, Shift+Enter — новая строка</p>
-      </section>
+        </div>
+      </aside>
     </main>
 
     <script src="{{ url_for('static', filename='app.js') }}"></script>

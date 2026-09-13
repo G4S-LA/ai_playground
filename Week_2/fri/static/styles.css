@@ -36,10 +36,10 @@ button:disabled {
 }
 
 .workspace {
-  width: min(1120px, 100%);
-  height: min(780px, calc(100vh - 48px));
+  width: min(1440px, 100%);
+  height: min(860px, calc(100dvh - 48px));
   display: grid;
-  grid-template-columns: 290px 1fr;
+  grid-template-columns: 260px minmax(0, 1fr) 300px;
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid #d7deea;
@@ -146,14 +146,15 @@ h2 {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(100px, 1fr) auto auto;
+  grid-template-rows: auto minmax(100px, 1fr) auto auto;
 }
 
 .chat__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
   padding: 24px 28px;
   border-bottom: 1px solid #e7ebf2;
 }
@@ -183,42 +184,45 @@ h2 {
 }
 
 .metrics {
+  display: block;
   min-height: 0;
-  padding: 12px 28px;
-  border-bottom: 1px solid #e7ebf2;
-  background: #f8faff;
   font-size: 12px;
-  max-height: 280px;
   overflow-y: auto;
+  overflow-wrap: anywhere;
 }
 
-.budget-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+.settings-panel .brand { padding: 0; margin-bottom: 24px; }
+.settings-panel h2 { margin-top: 4px; font-size: 26px; }
+.settings-panel h3 { margin: 0 0 14px; font-size: 15px; }
+.settings-panel .metrics-note { color: #c7d2fe; line-height: 1.5; }
+.context-metrics { margin-top: 22px; padding-top: 20px; border-top: 1px solid #615da2; }
+#branch-status:empty { display: none; }
+.settings-controls label { color: #e0e7ff; }
+.settings-controls input[type="number"] {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #736db9;
+  border-radius: 8px;
+  color: #172033;
+  background: #fff;
 }
+.settings-controls input:disabled { color: #4b5270; background: #e1e2f0; }
+.settings-panel #history-facts { color: #e0e7ff; background: #252260; }
+.settings-panel progress { accent-color: #c4b5fd; }
+.settings-panel .is-overflow { color: #fecaca; accent-color: #fca5a5; }
+.settings-panel th, .settings-panel td { border-color: #615da2; }
+.settings-panel #usage-totals { border-color: #615da2; line-height: 1.5; }
 
-.budget-controls input {
-  width: 105px;
-  padding: 6px;
-  border: 1px solid #cfd7e6;
-  border-radius: 6px;
-}
-
+.budget-controls,
 .context-controls {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
-  margin-top: 10px;
 }
-.context-controls input[type="number"] {
-  width: 64px;
-  padding: 5px;
-  border: 1px solid #cfd7e6;
-  border-radius: 6px;
-}
+
+.context-controls { margin-top: 16px; }
+.context-controls label:not(:first-child) { margin-top: 8px; }
+
 #history-facts {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -330,60 +334,75 @@ textarea:focus {
   border: 0;
 }
 
-@media (max-width: 760px) {
-  body {
-    padding: 0;
-  }
+.header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.chat__header > div:first-child { min-width: 0; }
+#chat-title { overflow-wrap: anywhere; }
+.strategy-controls { display: grid; gap: 8px; margin-top: 16px; }
+.strategy-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  background: #403b92;
+  border: 1px solid #736db9;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.strategy-toggle input { accent-color: #c4b5fd; }
+.strategy-toggle:has(input:checked) { background: #5149a6; border-color: #c4b5fd; }
+.strategy-toggle:has(input:disabled) { opacity: 0.65; cursor: not-allowed; }
+input:disabled { cursor: not-allowed; }
+#facts-details { margin: 8px 0; }
 
+@media (max-width: 1100px) {
+  .workspace { grid-template-columns: 210px minmax(0, 1fr) 270px; }
+  .chat__header, .messages, .composer { padding-right: 18px; padding-left: 18px; }
+  .hint { padding-right: 18px; padding-left: 18px; }
+  .header-actions button { padding: 0 12px; font-size: 13px; }
+}
+
+@media (max-width: 900px) {
   .workspace {
-    height: 100vh;
-    grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr);
-    border: 0;
-    border-radius: 0;
+    grid-template-columns: minmax(0, 1fr) 270px;
+    grid-template-rows: 140px minmax(0, 1fr);
   }
-
-  .sidebar {
+  .chats-sidebar {
+    grid-column: 1 / -1;
     padding: 14px;
     display: grid;
     grid-template-columns: 1fr auto;
+    grid-template-rows: 44px minmax(0, 1fr);
     gap: 10px;
   }
-
+  .chats-sidebar .brand h1 { font-size: 20px; }
   .chat-list {
     grid-column: 1 / -1;
     flex-direction: row;
     overflow-x: auto;
   }
-
-  .chat-list__item {
-    min-width: 180px;
-  }
-
-  .chat__header,
-  .messages,
-  .composer {
-    padding-right: 18px;
-    padding-left: 18px;
-  }
-
-  .hint {
-    display: none;
-  }
+  .chat-list__item { min-width: 180px; }
+  .settings-panel { border-top: 1px solid #615da2; }
+  .chat__header { padding-top: 14px; padding-bottom: 14px; }
 }
 
-.header-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-.strategy-controls { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
-.strategy-toggle { padding: 8px 10px; background: #edf2f7; border-radius: 8px; cursor: pointer; }
-.strategy-toggle:has(input:checked) { background: #ede9fe; outline: 1px solid #8b5cf6; }
-.strategy-toggle:has(input:disabled) { opacity: 0.65; cursor: not-allowed; }
-input:disabled { color: #667085; background: #f1f3f7; cursor: not-allowed; }
-#facts-details { margin: 8px 0; }
-#facts-max-tokens { width: 80px; }
 @media (max-width: 760px) {
-  .chat__header { padding-top: 12px; padding-bottom: 12px; gap: 8px; }
-  .header-actions { max-width: 160px; }
+  body { padding: 0; display: block; }
+  .workspace {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+  }
+  .chats-sidebar { height: 140px; flex: none; }
+  .chat { height: calc(100dvh - 140px); min-height: 400px; flex: none; }
+  .chat__header { gap: 10px; }
+  .header-actions { gap: 8px; }
   .header-actions button { min-height: 34px; font-size: 12px; }
-  .metrics { padding: 10px 18px; max-height: 240px; }
-  .sidebar .brand h1 { font-size: 20px; }
+  .hint { display: none; }
+  .settings-panel { padding: 24px 18px; overflow: visible; }
+  .settings-panel .brand { margin-bottom: 20px; }
+  .settings-controls, .context-metrics { width: 100%; }
 }
