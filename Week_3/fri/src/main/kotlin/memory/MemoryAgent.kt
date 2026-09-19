@@ -32,11 +32,15 @@ class MemoryAgent(
         val message = validateMessage(rawMessage)
         val trace = mutableListOf<TaskState>()
         return try {
-            when (store.snapshot(sessionId).taskState.stageValue()) {
+            val currentState = store.snapshot(sessionId).taskState
+            when (currentState.stageValue()) {
                 TaskStage.IDLE, TaskStage.DONE, TaskStage.FAILED ->
                     createPlan(sessionId, message, trace, onStateChange)
-                TaskStage.PLANNING ->
+                TaskStage.PLANNING -> if (currentState.planReady && looksLikeApproval(message)) {
+                    remindAboutExplicitApproval(sessionId, message)
+                } else {
                     revisePlan(sessionId, message, trace, onStateChange)
+                }
                 TaskStage.BLOCKED -> {
                     val task = requiredWorking(sessionId, "agent_task")
                     emit(
@@ -145,8 +149,12 @@ class MemoryAgent(
             trace,
             callback,
         )
-        store.appendTurn(sessionId, message, plan, trace)
-        return MessageResponse(plan, snapshot(sessionId))
+        val response = presentPlan(
+            acknowledgement = "Задачу понял так: «${oneLine(message)}».",
+            plan = plan,
+        )
+        store.appendTurn(sessionId, message, response, trace)
+        return MessageResponse(response, snapshot(sessionId))
     }
 
     private fun revisePlan(
@@ -183,8 +191,25 @@ class MemoryAgent(
             trace,
             callback,
         )
-        store.appendTurn(sessionId, feedback, revisedPlan, trace)
-        return MessageResponse(revisedPlan, snapshot(sessionId))
+        val response = presentPlan(
+            acknowledgement = "Принял замечание к плану: «${oneLine(feedback)}».",
+            plan = revisedPlan,
+            revised = true,
+        )
+        store.appendTurn(sessionId, feedback, response, trace)
+        return MessageResponse(response, snapshot(sessionId))
+    }
+
+    private fun remindAboutExplicitApproval(
+        sessionId: String,
+        message: String,
+    ): MessageResponse {
+        val response =
+            "Похоже, вы согласны с планом. Я ещё не начал реализацию: нужно отдельное " +
+                "подтверждение. Используйте /approve в CLI или кнопку «Утвердить план и выполнить» " +
+                "в веб-интерфейсе. До подтверждения задача останется в planning."
+        store.appendTurn(sessionId, message, response)
+        return MessageResponse(response, snapshot(sessionId))
     }
 
     private fun executeAndValidate(
@@ -290,6 +315,35 @@ class MemoryAgent(
         store.snapshot(sessionId).working.lastOrNull { it.category == category }?.content
             ?: throw LifecycleException("В рабочей памяти отсутствует $category.")
 
+    private fun presentPlan(
+        acknowledgement: String,
+        plan: String,
+        revised: Boolean = false,
+    ): String = buildString {
+        appendLine(acknowledgement)
+        appendLine()
+        appendLine(if (revised) "Обновлённый план:" else "Предлагаемый план:")
+        appendLine(plan)
+        appendLine()
+        append(
+            "Я пока не приступаю к реализации. Проверьте план и подтвердите его через " +
+                "/approve в CLI или кнопку «Утвердить план и выполнить» в веб-интерфейсе. " +
+                "Если нужны изменения, напишите замечания обычным сообщением."
+        )
+    }
+
+    private fun looksLikeApproval(message: String): Boolean = APPROVAL_MESSAGE.matches(
+        message.trim().lowercase()
+            .replace(Regex("[,.!?;:]+"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    )
+
+    private fun oneLine(value: String): String {
+        val normalized = value.replace(Regex("\\s+"), " ").trim()
+        return if (normalized.length <= 240) normalized else normalized.take(237) + "…"
+    }
+
     private fun emit(
         state: TaskState,
         trace: MutableList<TaskState>,
@@ -333,5 +387,10 @@ class MemoryAgent(
         const val MAX_VALIDATION_ATTEMPTS = 2
         const val CLARIFICATION_RESPONSE =
             "Проверка дважды нашла проблемы. Уточните требования, чтобы я продолжил эту задачу."
+        val APPROVAL_MESSAGE = Regex(
+            "(?:да|ок|окей|согласен|согласна|утверждаю|план подходит|всё хорошо|все хорошо|" +
+                "приступай|начинай|можно начинать|делай|да начинай|давай делать|давай начинай|" +
+                "ок делай|ок начинай)"
+        )
     }
 }

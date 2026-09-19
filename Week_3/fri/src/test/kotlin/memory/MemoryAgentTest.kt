@@ -25,6 +25,9 @@ class MemoryAgentTest {
         assertEquals("planning", planned.snapshot.taskState.stage)
         assertTrue(planned.snapshot.taskState.planReady)
         assertFalse(planned.snapshot.taskState.planApproved)
+        assertTrue(planned.answer.contains("Задачу понял так"))
+        assertTrue(planned.answer.contains("Я пока не приступаю к реализации"))
+        assertTrue(planned.answer.contains("/approve"))
         assertEquals(
             listOf("planning", "planning"),
             planned.snapshot.session.messages.last().stateTrace.map { it.stage },
@@ -33,6 +36,12 @@ class MemoryAgentTest {
             listOf("goal", "agent_task", "agent_plan"),
             planned.snapshot.working.map { it.category },
         )
+
+        val informalApproval = agent.reply(session.id, "Да, начинай")
+        assertEquals(1, model.calls.size)
+        assertEquals("planning", informalApproval.snapshot.taskState.stage)
+        assertFalse(informalApproval.snapshot.taskState.planApproved)
+        assertTrue(informalApproval.answer.contains("нужно отдельное подтверждение"))
 
         val completed = agent.approvePlan(session.id)
 
@@ -65,6 +74,8 @@ class MemoryAgentTest {
         assertTrue(revised.snapshot.taskState.planReady)
         assertFalse(revised.snapshot.taskState.planApproved)
         assertEquals(2, model.calls.size)
+        assertTrue(revised.answer.contains("Принял замечание к плану"))
+        assertTrue(revised.answer.contains("Обновлённый план"))
         assertTrue(model.calls[1].last().content.contains("Добавь написание тестов"))
         assertTrue(
             revised.snapshot.working.single { it.category == "agent_plan" }
