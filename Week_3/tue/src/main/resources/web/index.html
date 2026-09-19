@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Персонализированный агент</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <main class="workspace">
+      <aside class="sidebar chats-sidebar">
+        <div class="brand">
+          <p class="eyebrow">Неделя 3 · Вторник</p>
+          <h1>Мои диалоги</h1>
+        </div>
+        <button id="new-session" class="new-chat-button" type="button">+ Новый диалог</button>
+        <nav id="session-list" class="session-list" aria-label="Диалоги"></nav>
+      </aside>
+
+      <section class="chat">
+        <header class="chat__header">
+          <div>
+            <h2 id="session-title">Загрузка…</h2>
+            <p id="model-name" class="model"></p>
+          </div>
+          <button id="delete-session" class="secondary-button" type="button">Удалить диалог</button>
+        </header>
+
+        <section id="messages" class="messages" aria-live="polite"></section>
+
+        <form id="chat-form" class="composer">
+          <label class="visually-hidden" for="message-input">Сообщение</label>
+          <textarea id="message-input" rows="3" maxlength="4000"
+            placeholder="Введите запрос…" required></textarea>
+          <button id="send-button" class="primary-button" type="submit">Отправить</button>
+        </form>
+        <p class="hint">Enter — отправить · обычная переписка остаётся в краткосрочной памяти</p>
+      </section>
+
+      <aside class="sidebar memory-panel" aria-labelledby="memory-title">
+        <div class="brand memory-heading">
+          <p class="eyebrow">Автоматическая адаптация</p>
+          <h2 id="memory-title">Профиль и память</h2>
+        </div>
+
+        <section class="profile-card" aria-labelledby="profile-title">
+          <div class="profile-card__heading">
+            <h3 id="profile-title">Профиль пользователя</h3>
+            <button id="new-profile" class="profile-link" type="button">Новый</button>
+          </div>
+          <label for="profile-select">Активный профиль</label>
+          <select id="profile-select"></select>
+          <form id="profile-form" class="profile-form">
+            <label for="profile-name">Название</label>
+            <input id="profile-name" maxlength="80" required>
+            <label for="profile-style">Стиль ответа</label>
+            <textarea id="profile-style" rows="2" maxlength="500" required></textarea>
+            <label for="profile-format">Формат ответа</label>
+            <textarea id="profile-format" rows="2" maxlength="500" required></textarea>
+            <label for="profile-constraints">Ограничения — по одному в строке</label>
+            <textarea id="profile-constraints" rows="3" maxlength="2000"></textarea>
+            <div class="profile-actions">
+              <button id="save-profile" class="memory-button" type="submit">Сохранить</button>
+              <button id="delete-profile" class="profile-delete" type="button">Удалить</button>
+            </div>
+            <p id="profile-status" class="memory-status" role="status"></p>
+          </form>
+        </section>
+
+        <h3 class="panel-section-title">Слои памяти</h3>
+
+        <section class="layer layer--short">
+          <div class="layer__heading">
+            <div><span class="layer__dot"></span><h3>Краткосрочная</h3></div>
+            <span id="short-count" class="layer__count">0</span>
+          </div>
+          <p>Текущий диалог. Новая сессия начинает его заново.</p>
+          <div id="short-memory" class="memory-list"></div>
+        </section>
+
+        <section class="layer layer--working">
+          <div class="layer__heading">
+            <div><span class="layer__dot"></span><h3>Рабочая</h3></div>
+            <span id="working-count" class="layer__count">0</span>
+          </div>
+          <p>Цель, контекст и ограничения текущей задачи.</p>
+          <div id="working-memory" class="memory-list"></div>
+        </section>
+
+        <section class="layer layer--long">
+          <div class="layer__heading">
+            <div><span class="layer__dot"></span><h3>Долговременная</h3></div>
+            <span id="long-count" class="layer__count">0</span>
+          </div>
+          <p>Профиль, решения и знания — общие для всех диалогов.</p>
+          <div id="long-memory" class="memory-list"></div>
+        </section>
+
+        <form id="memory-form" class="memory-form">
+          <h3>Сохранить в память</h3>
+          <label for="memory-layer">Слой</label>
+          <select id="memory-layer" required>
+            <option value="short_term">Краткосрочная</option>
+            <option value="working" selected>Рабочая</option>
+            <option value="long_term">Долговременная</option>
+          </select>
+          <label for="memory-category">Тип записи</label>
+          <select id="memory-category" required></select>
+          <label for="memory-content">Что запомнить</label>
+          <textarea id="memory-content" rows="3" maxlength="4000"
+            placeholder="Например: цель — подготовить демо к пятнице" required></textarea>
+          <button id="remember-button" class="memory-button" type="submit">Сохранить явно</button>
+          <p id="memory-status" class="memory-status" role="status"></p>
+        </form>
+      </aside>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
