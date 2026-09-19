@@ -174,22 +174,12 @@ function renderTaskState(state) {
   const activeIndex = stageOrder.indexOf(state.stage);
   for (const node of document.querySelectorAll(".state-flow [data-stage]")) {
     const index = stageOrder.indexOf(node.dataset.stage);
-    const planningSkipped = node.dataset.stage === "planning" &&
-      state.stage !== "idle" && !state.planningApplied;
     node.classList.toggle("is-active", index === activeIndex);
-    node.classList.toggle("is-complete", activeIndex >= 0 && index < activeIndex && !planningSkipped);
-    node.classList.toggle("is-skipped", planningSkipped);
-    if (planningSkipped) {
-      node.title = "Этап не потребовался для этого запроса";
-      node.setAttribute("aria-label", "План — пропущен");
-    } else {
-      node.removeAttribute("title");
-      node.removeAttribute("aria-label");
-    }
+    node.classList.toggle("is-complete", activeIndex >= 0 && index < activeIndex);
   }
   const statuses = {
-    idle: "Введите запрос: агент определит, нужен ли этап planning.",
-    done: "Цикл завершён. Новый запрос начнётся с planning или execution.",
+    idle: "Введите запрос: агент начнёт с обязательного этапа planning.",
+    done: "Цикл завершён. Новый запрос обязательно начнётся с planning.",
     blocked: "Цикл остановлен безопасно. Уточнение пользователя возобновит execution.",
     failed: "Попытка завершилась ошибкой; черновик не выдан как готовый результат.",
   };

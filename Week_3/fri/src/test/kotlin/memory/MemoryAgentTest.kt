@@ -14,7 +14,7 @@ class MemoryAgentTest {
             "Готово",
             "VALID",
         )
-        val agent = testAgent(model, PlanningPolicy { true })
+        val agent = testAgent(model)
         val session = agent.createSession()
         agent.remember(session.id, "working", "goal", "Сделать CLI")
         agent.remember(session.id, "long_term", "decision", "Используем Kotlin")
@@ -44,19 +44,20 @@ class MemoryAgentTest {
     }
 
     @Test
-    fun `simple request skips planning`() {
-        val model = RecordingModel("Короткий ответ", "VALID")
-        val agent = testAgent(model, PlanningPolicy { false })
+    fun `even simple request is planned before execution`() {
+        val model = RecordingModel("1. Подготовить короткий ответ", "Короткий ответ", "VALID")
+        val agent = testAgent(model)
         val session = agent.createSession()
 
         val response = agent.reply(session.id, "Привет")
 
         assertEquals("Короткий ответ", response.answer)
-        assertEquals(2, model.calls.size)
-        assertEquals(false, response.snapshot.taskState.planningApplied)
-        assertTrue(response.snapshot.working.none { it.category == "agent_plan" })
+        assertEquals(3, model.calls.size)
+        assertTrue(response.snapshot.taskState.planningApplied)
+        assertTrue(response.snapshot.taskState.planApproved)
+        assertTrue(response.snapshot.working.any { it.category == "agent_plan" })
         assertEquals(
-            listOf("execution", "validation", "done"),
+            listOf("planning", "execution", "validation", "done"),
             response.snapshot.session.messages.last().stateTrace.map { it.stage },
         )
     }
@@ -64,34 +65,36 @@ class MemoryAgentTest {
     @Test
     fun `failed validation returns to execution and checks revised answer`() {
         val model = RecordingModel(
+            "1. Подготовить ответ\n2. Проверить полноту",
             "Первый черновик",
             "REVISE\nДобавить важную деталь",
             "Исправленный ответ",
             "VALID",
         )
-        val agent = testAgent(model, PlanningPolicy { false })
+        val agent = testAgent(model)
         val session = agent.createSession()
 
         val response = agent.reply(session.id, "Объясни подробно")
 
         assertEquals("Исправленный ответ", response.answer)
-        assertEquals(4, model.calls.size)
+        assertEquals(5, model.calls.size)
         assertEquals(
-            listOf("execution", "validation", "execution", "validation", "done"),
+            listOf("planning", "execution", "validation", "execution", "validation", "done"),
             response.snapshot.session.messages.last().stateTrace.map { it.stage },
         )
-        assertTrue(model.calls[2].last().content.contains("Добавить важную деталь"))
+        assertTrue(model.calls[3].last().content.contains("Добавить важную деталь"))
     }
 
     @Test
     fun `repeated validation rejection blocks until user clarification`() {
         val model = RecordingModel(
+            "1. Уточнить смысл\n2. Подготовить ответ",
             "Неподходящий ответ",
             "REVISE\nЗапрос непонятен",
             "Другой неподходящий ответ",
             "REVISE\nНужно запросить уточнение",
         )
-        val agent = testAgent(model, PlanningPolicy { false })
+        val agent = testAgent(model)
         val session = agent.createSession()
 
         val response = agent.reply(session.id, ".")
@@ -104,7 +107,7 @@ class MemoryAgentTest {
         assertEquals("Ожидается уточнение пользователя", response.snapshot.taskState.expectedAction)
         assertEquals(2, response.snapshot.taskState.validationAttempts)
         assertEquals(
-            listOf("execution", "validation", "execution", "validation", "blocked"),
+            listOf("planning", "execution", "validation", "execution", "validation", "blocked"),
             response.snapshot.session.messages.last().stateTrace.map { it.stage },
         )
 
@@ -123,7 +126,7 @@ class MemoryAgentTest {
         val model = object : LanguageModel {
             override fun complete(messages: List<PromptMessage>): String = throw AgentException("offline")
         }
-        val agent = testAgent(model, PlanningPolicy { false })
+        val agent = testAgent(model)
         val session = agent.createSession()
 
         assertFailsWith<AgentException> { agent.reply(session.id, "Привет") }
@@ -133,9 +136,9 @@ class MemoryAgentTest {
         assertEquals("offline", state.lastFailure)
     }
 
-    private fun testAgent(model: LanguageModel, policy: PlanningPolicy): MemoryAgent {
+    private fun testAgent(model: LanguageModel): MemoryAgent {
         val store = FileMemoryStore(Files.createTempDirectory("memory-agent-test"))
-        return MemoryAgent(store, model, "system", "test-model", policy)
+        return MemoryAgent(store, model, "system", "test-model")
     }
 
     private fun List<PromptMessage>.taskState(): String =

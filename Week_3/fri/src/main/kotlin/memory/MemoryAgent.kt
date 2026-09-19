@@ -9,7 +9,6 @@ class MemoryAgent(
     private val model: LanguageModel,
     systemPrompt: String,
     private val modelName: String,
-    private val planningPolicy: PlanningPolicy = LlmPlanningPolicy(model),
 ) {
     private val promptBuilder = PromptBuilder(systemPrompt)
     private val stateMachine = TaskStateMachine()
@@ -137,29 +136,21 @@ class MemoryAgent(
         trace: MutableList<TaskState>,
         callback: (TaskState) -> Unit,
     ) {
-        if (planningPolicy.needsPlanning(message)) {
-            emit(
-                move(sessionId, TaskEvent.START_WITH_PLAN, "Составить план выполнения запроса"),
-                trace,
-                callback,
-            )
-            val plan = requireOutput(
-                model.complete(promptBuilder.build(store.snapshot(sessionId), message)),
-                "Модель не составила план.",
-            )
-            store.replaceWorkingPlan(sessionId, plan)
-            emit(
-                move(sessionId, TaskEvent.APPROVE_PLAN, "Выполнить утверждённый план"),
-                trace,
-                callback,
-            )
-        } else {
-            emit(
-                move(sessionId, TaskEvent.START_WITHOUT_PLAN, "Выполнить простой запрос пользователя"),
-                trace,
-                callback,
-            )
-        }
+        emit(
+            move(sessionId, TaskEvent.START_TASK, "Составить план выполнения запроса"),
+            trace,
+            callback,
+        )
+        val plan = requireOutput(
+            model.complete(promptBuilder.build(store.snapshot(sessionId), message)),
+            "Модель не составила план.",
+        )
+        store.replaceWorkingPlan(sessionId, plan)
+        emit(
+            move(sessionId, TaskEvent.APPROVE_PLAN, "Выполнить утверждённый план"),
+            trace,
+            callback,
+        )
     }
 
     private fun move(

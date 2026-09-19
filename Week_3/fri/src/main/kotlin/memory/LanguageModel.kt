@@ -67,9 +67,6 @@ class OpenAiCompatibleModel(
 class DemoLanguageModel : LanguageModel {
     override fun complete(messages: List<PromptMessage>): String {
         val query = messages.lastOrNull { it.role == "user" }?.content.orEmpty()
-        if (messages.any { it.content.startsWith("[PLANNING_ROUTER]") }) {
-            return if (RequestComplexityPolicy().needsPlanning(query)) "PLAN" else "DIRECT"
-        }
         val longCount = messages.firstOrNull { it.content.startsWith("[LONG_TERM_MEMORY]") }
             ?.content?.lineSequence()?.count { it.startsWith("- ") } ?: 0
         val workingCount = messages.firstOrNull { it.content.startsWith("[WORKING_MEMORY]") }

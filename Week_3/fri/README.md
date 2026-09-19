@@ -19,32 +19,30 @@ planning → execution → validation → done
 `pass_validation`), а единственный `TaskStateMachine` определяет следующий
 этап. Благодаря этому нельзя напрямую присвоить `done`.
 
-Перед стартовым событием отдельный LLM-router оценивает сложность запроса. Он
-возвращает только `PLAN` или `DIRECT`: большие, многошаговые, архитектурные и
-рискованные задачи начинают путь с `planning`, а короткие и простые — сразу с
-`execution`. Текст пользователя передаётся router-у как данные, поэтому просьба
-«пропусти планирование» не управляет автоматом напрямую. При ошибке или любом
-другом ответе модели применяется детерминированная `RequestComplexityPolicy`.
+В этом примере планирование обязательно для любой задачи. Новый цикл имеет
+только одно стартовое событие `start_task`, которое переводит `idle` в
+`planning`. Даже просьба пользователя «пропусти план и сразу выполни» остаётся
+данными запроса и не может выбрать другой переход.
 
 ```text
-user request → LLM planning router → PLAN   → planning → execution
-                                └──→ DIRECT → execution
+user request → planning → approve_plan → execution → validation → done
 ```
 
 ## Состояния и события
 
 | Состояние | Разрешённые события | Результат |
 |---|---|---|
-| `idle` | `start_with_plan`, `start_without_plan` | `planning` или `execution` |
+| `idle` | `start_task` | `planning` |
 | `planning` | `approve_plan`, `block`, `fail` | `execution`, `blocked` или `failed` |
 | `execution` | `complete_execution`, `request_replanning`, `block`, `fail` | `validation`, `planning`, `blocked` или `failed` |
 | `validation` | `pass_validation`, `reject_validation`, `exhaust_validation`, `block`, `fail` | `done`, `execution`, `blocked` или `failed` |
 | `blocked` | `resume`, `fail` | восстановление этапа или `failed` |
-| `failed` | `retry`, `start_with_plan`, `start_without_plan` | повтор этапа или новый цикл |
-| `done` | `start_with_plan`, `start_without_plan` | новый цикл |
+| `failed` | `retry`, `start_task` | повтор этапа или новый цикл с `planning` |
+| `done` | `start_task` | новый цикл с `planning` |
 
 Главные гарантии:
 
+- любое выполнение предваряется составлением и утверждением плана;
 - после `planning` выполнение начинается только событием `approve_plan`;
 - `done` достижим только событием `pass_validation` из `validation`;
 - `reject_validation` возвращает задачу в `execution`;
@@ -76,7 +74,7 @@ OpenAI-совместимой модели скопируйте `.env.example` �
 ## Что проверяют тесты
 
 - запрет реализации до утверждения плана;
-- выбор моделью между планированием большой задачи и прямым выполнением простой;
+- обязательный маршрут `idle → planning → execution` даже для простого запроса;
 - запрет `done` без валидации;
 - неизменность состояния после запрещённого события;
 - возврат `validation → execution`;

@@ -25,8 +25,7 @@ enum class TaskStage(val wireName: String) {
  * код не может выставить произвольное состояние и обойти обязательный этап.
  */
 enum class TaskEvent(val wireName: String) {
-    START_WITH_PLAN("start_with_plan"),
-    START_WITHOUT_PLAN("start_without_plan"),
+    START_TASK("start_task"),
     APPROVE_PLAN("approve_plan"),
     REQUEST_REPLANNING("request_replanning"),
     COMPLETE_EXECUTION("complete_execution"),
@@ -117,20 +116,18 @@ class TaskStateMachine {
             requireNotNull(normalizedFailure) { "Для события ${event.wireName} нужно указать причину." }
         }
 
-        val starting = event == TaskEvent.START_WITH_PLAN || event == TaskEvent.START_WITHOUT_PLAN
+        val starting = event == TaskEvent.START_TASK
         val planningApplied = when (event) {
-            TaskEvent.START_WITH_PLAN, TaskEvent.REQUEST_REPLANNING -> true
-            TaskEvent.START_WITHOUT_PLAN -> false
+            TaskEvent.START_TASK, TaskEvent.REQUEST_REPLANNING -> true
             else -> current.planningApplied
         }
         val planApproved = when (event) {
             TaskEvent.APPROVE_PLAN -> true
-            TaskEvent.START_WITH_PLAN, TaskEvent.START_WITHOUT_PLAN, TaskEvent.REQUEST_REPLANNING -> false
+            TaskEvent.START_TASK, TaskEvent.REQUEST_REPLANNING -> false
             else -> current.planApproved
         }
         val validationAttempts = when (event) {
-            TaskEvent.START_WITH_PLAN, TaskEvent.START_WITHOUT_PLAN,
-            TaskEvent.RESUME, TaskEvent.RETRY -> 0
+            TaskEvent.START_TASK, TaskEvent.RESUME, TaskEvent.RETRY -> 0
             TaskEvent.REJECT_VALIDATION, TaskEvent.EXHAUST_VALIDATION -> current.validationAttempts + 1
             else -> current.validationAttempts
         }
@@ -153,7 +150,7 @@ class TaskStateMachine {
             lastFailure = when (event) {
                 TaskEvent.BLOCK, TaskEvent.FAIL, TaskEvent.EXHAUST_VALIDATION -> normalizedFailure
                 TaskEvent.RESUME, TaskEvent.RETRY,
-                TaskEvent.START_WITH_PLAN, TaskEvent.START_WITHOUT_PLAN -> null
+                TaskEvent.START_TASK -> null
                 else -> current.lastFailure
             },
         )
@@ -161,10 +158,7 @@ class TaskStateMachine {
     }
 
     fun allowedEvents(state: TaskState): Set<TaskEvent> = when (state.stageValue()) {
-        TaskStage.IDLE, TaskStage.DONE -> setOf(
-            TaskEvent.START_WITH_PLAN,
-            TaskEvent.START_WITHOUT_PLAN,
-        )
+        TaskStage.IDLE, TaskStage.DONE -> setOf(TaskEvent.START_TASK)
         TaskStage.PLANNING -> setOf(
             TaskEvent.APPROVE_PLAN,
             TaskEvent.BLOCK,
@@ -186,8 +180,7 @@ class TaskStateMachine {
         TaskStage.BLOCKED -> setOf(TaskEvent.RESUME, TaskEvent.FAIL)
         TaskStage.FAILED -> setOf(
             TaskEvent.RETRY,
-            TaskEvent.START_WITH_PLAN,
-            TaskEvent.START_WITHOUT_PLAN,
+            TaskEvent.START_TASK,
         )
     }
 
@@ -205,9 +198,8 @@ class TaskStateMachine {
     )
 
     private fun targetFor(current: TaskState, event: TaskEvent): TaskStage = when (event) {
-        TaskEvent.START_WITH_PLAN, TaskEvent.REQUEST_REPLANNING -> TaskStage.PLANNING
-        TaskEvent.START_WITHOUT_PLAN, TaskEvent.APPROVE_PLAN,
-        TaskEvent.REJECT_VALIDATION -> TaskStage.EXECUTION
+        TaskEvent.START_TASK, TaskEvent.REQUEST_REPLANNING -> TaskStage.PLANNING
+        TaskEvent.APPROVE_PLAN, TaskEvent.REJECT_VALIDATION -> TaskStage.EXECUTION
         TaskEvent.COMPLETE_EXECUTION -> TaskStage.VALIDATION
         TaskEvent.PASS_VALIDATION -> TaskStage.DONE
         TaskEvent.EXHAUST_VALIDATION, TaskEvent.BLOCK -> TaskStage.BLOCKED

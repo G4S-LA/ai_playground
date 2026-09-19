@@ -68,7 +68,7 @@ class FileMemoryStoreTest {
         val session = store.createSession()
         val started = store.applyTaskEvent(
             session.id,
-            TaskEvent.START_WITH_PLAN,
+            TaskEvent.START_TASK,
             "Составить план",
         )
         assertIs<TransitionResult.Accepted>(started)

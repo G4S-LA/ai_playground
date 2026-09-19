@@ -82,9 +82,9 @@ class MemoryCli(private val agent: MemoryAgent) {
         )
         println("Разрешённые события: ${state.allowedEvents.joinToString().ifEmpty { "нет" }}")
         if (state.stage == TaskStage.IDLE.wireName) {
-            println("Новый запрос начнёт цикл с planning или сразу с execution.")
+            println("Новый запрос обязательно начнёт цикл с planning.")
         } else if (state.stage == TaskStage.DONE.wireName) {
-            println("Следующий запрос начнёт новый цикл с planning или сразу с execution.")
+            println("Следующий запрос начнёт новый цикл с planning.")
         } else if (state.stage == TaskStage.BLOCKED.wireName) {
             println("Причина: ${state.lastFailure}. Следующее сообщение возобновит задачу.")
         } else if (state.stage == TaskStage.FAILED.wireName) {
