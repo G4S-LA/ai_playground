@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Агент с инвариантами</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <main class="workspace">
+      <aside class="sessions">
+        <p class="eyebrow">Неделя 3 · Четверг</p>
+        <h1>Инварианты</h1>
+        <p class="intro">Правила живут отдельно от диалогов и памяти. Каждый ответ проходит проверку.</p>
+        <button id="new-session" class="button button--light" type="button">+ Новый диалог</button>
+        <nav id="session-list" class="session-list" aria-label="Диалоги"></nav>
+      </aside>
+
+      <section class="chat">
+        <header class="chat__header">
+          <div><h2 id="session-title">Загрузка…</h2><p id="model-name"></p></div>
+          <button id="delete-session" class="button button--quiet" type="button">Удалить</button>
+        </header>
+        <section id="messages" class="messages" aria-live="polite"></section>
+        <form id="chat-form" class="composer">
+          <textarea id="message-input" rows="3" maxlength="4000" placeholder="Попросите предложить решение…" required></textarea>
+          <button id="send-button" class="button button--primary" type="submit">Отправить</button>
+        </form>
+      </section>
+
+      <aside class="control-panel">
+        <section class="panel panel--invariants">
+          <div class="panel__title"><div><p class="eyebrow">Не память</p><h2>Инварианты</h2></div><span id="invariant-count">0</span></div>
+          <p>Глобальные обязательные правила с приоритетом над запросом.</p>
+          <div id="invariant-list" class="item-list"></div>
+          <form id="invariant-form" class="compact-form">
+            <select id="invariant-category" aria-label="Категория инварианта" required></select>
+            <textarea id="invariant-content" rows="2" maxlength="4000" placeholder="Например: запрещено использовать Python" required></textarea>
+            <button class="button button--danger" type="submit">Добавить инвариант</button>
+          </form>
+        </section>
+
+        <section class="panel">
+          <div class="panel__title"><div><p class="eyebrow">Изменяемый контекст</p><h2>Память</h2></div></div>
+          <div class="memory-columns">
+            <div><h3>Рабочая <span id="working-count">0</span></h3><div id="working-list" class="item-list"></div></div>
+            <div><h3>Долговременная <span id="long-count">0</span></h3><div id="long-list" class="item-list"></div></div>
+          </div>
+          <form id="memory-form" class="compact-form">
+            <div class="form-row">
+              <select id="memory-layer" required><option value="working">Рабочая</option><option value="long_term">Долговременная</option></select>
+              <select id="memory-category" required></select>
+            </div>
+            <textarea id="memory-content" rows="2" maxlength="4000" placeholder="Контекст текущей задачи" required></textarea>
+            <button class="button button--quiet" type="submit">Сохранить в память</button>
+          </form>
+        </section>
+      </aside>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
