@@ -11,6 +11,7 @@ const categoryLabels = {
   constraint: "Ограничение",
   note: "Заметка",
   agent_plan: "План агента",
+  agent_task: "Исходная задача",
   profile: "Профиль",
   decision: "Решение",
   knowledge: "Знание",
@@ -52,6 +53,7 @@ function setBusy(value) {
   for (const element of [
     input, $("#send-button"), $("#new-session"), $("#delete-session"),
     layerSelect, categorySelect, $("#memory-content"), $("#remember-button"),
+    $("#approve-plan"),
   ]) element.disabled = value || !currentSessionId;
   for (const button of document.querySelectorAll("#session-list button, .memory-item__delete")) {
     button.disabled = value;
@@ -166,6 +168,12 @@ function renderTaskState(state) {
   $("#task-stage").textContent = stageLabels[state.stage] || state.stage;
   $("#task-step").textContent = state.currentStep || "—";
   $("#expected-action").textContent = state.expectedAction;
+  $("#plan-status").textContent = state.planApproved
+    ? "Утверждён"
+    : state.planReady
+      ? "Готов и ожидает утверждения"
+      : "Ещё не готов";
+  $("#approve-plan").hidden = !(state.stage === "planning" && state.planReady);
   $("#allowed-events").textContent = state.allowedEvents.length
     ? state.allowedEvents.join(", ")
     : "нет";
@@ -182,6 +190,9 @@ function renderTaskState(state) {
     done: "Цикл завершён. Новый запрос обязательно начнётся с planning.",
     blocked: "Цикл остановлен безопасно. Уточнение пользователя возобновит execution.",
     failed: "Попытка завершилась ошибкой; черновик не выдан как готовый результат.",
+    planning: state.planReady
+      ? "Проверьте план: утвердите его кнопкой или напишите замечания в чат."
+      : "Агент составляет или обновляет план. Реализация ещё недоступна.",
   };
   $("#state-status").textContent = statuses[state.stage] ||
     "Сейчас агент выполняет выделенный этап; переход задаётся разрешённым событием.";
@@ -274,7 +285,10 @@ $("#chat-form").addEventListener("submit", (event) => {
   runAction(async () => {
     if (!currentSnapshot.session.messages.length) messages.replaceChildren();
     addMessage("user", message);
-    const pending = addMessage("agent", "Определяю маршрут выполнения…");
+    const pendingText = currentSnapshot.taskState.stage === "planning"
+      ? "Обновляю план по замечаниям…"
+      : "Составляю план задачи…";
+    const pending = addMessage("agent", pendingText);
     pending.classList.add("message--pending");
     const baselineUpdatedAt = currentSnapshot.taskState.updatedAt;
     let watching = true;
@@ -291,6 +305,33 @@ $("#chat-form").addEventListener("submit", (event) => {
       await watcher;
       pending.remove();
       input.value = message;
+      throw error;
+    }
+  });
+});
+
+$("#approve-plan").addEventListener("click", () => {
+  if (busy || !currentSnapshot?.taskState?.planReady) return;
+  runAction(async () => {
+    addMessage("user", "План утверждён.");
+    const pending = addMessage("agent", "Выполняю утверждённый план…");
+    pending.classList.add("message--pending");
+    const baselineUpdatedAt = currentSnapshot.taskState.updatedAt;
+    let watching = true;
+    const watcher = watchTaskState(baselineUpdatedAt, pending, () => watching);
+    try {
+      const result = await requestJson(
+        sessionUrl("/tasks/approve"),
+        jsonOptions("POST", {}),
+      );
+      watching = false;
+      await watcher;
+      renderSnapshot(result.snapshot);
+      await refreshSessions();
+    } catch (error) {
+      watching = false;
+      await watcher;
+      pending.remove();
       throw error;
     }
   });

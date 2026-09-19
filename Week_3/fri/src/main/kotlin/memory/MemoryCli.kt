@@ -52,6 +52,12 @@ class MemoryCli(private val agent: MemoryAgent) {
             "/memory" -> printMemory(tail.ifBlank { "all" })
             "/forget" -> forget(tail)
             "/state" -> printState()
+            "/approve" -> {
+                val result = agent.approvePlan(sessionId) { state ->
+                    println("[${state.stage}] шаг ${state.currentStep} · ${state.expectedAction}")
+                }
+                println("Агент: ${result.answer}")
+            }
             "/exit", "/quit" -> return false
             else -> throw IllegalArgumentException("Неизвестная команда '$name'. Используйте /help.")
         }
@@ -81,6 +87,9 @@ class MemoryCli(private val agent: MemoryAgent) {
                 "ожидается=${state.expectedAction}"
         )
         println("Разрешённые события: ${state.allowedEvents.joinToString().ifEmpty { "нет" }}")
+        if (state.stage == TaskStage.PLANNING.wireName && state.planReady) {
+            println("План готов: /approve — утвердить, обычное сообщение — отправить замечания.")
+        }
         if (state.stage == TaskStage.IDLE.wireName) {
             println("Новый запрос обязательно начнёт цикл с planning.")
         } else if (state.stage == TaskStage.DONE.wireName) {
@@ -144,13 +153,16 @@ class MemoryCli(private val agent: MemoryAgent) {
               /memory [all|short_term|working|long_term]
               /forget <layer> <memory-id>
               /state                  показать этап, шаг и ожидаемое действие
+              /approve                утвердить готовый план и начать выполнение
               /new                    новый диалог и новая рабочая память
               /sessions               список диалогов
               /use <session-id>       открыть диалог
               /delete                 удалить текущий диалог и его рабочую память
               /exit                   выход
 
-            Happy path: planning → execution → validation → done.
+            Новый запрос сначала создаёт план и останавливается в planning.
+            До /approve обычные сообщения считаются замечаниями к плану.
+            Happy path после утверждения: execution → validation → done.
             Red path: validation → execution либо blocked; техническая ошибка → failed.
             Каждый переход выполняется только по разрешённому событию.
             """.trimIndent()

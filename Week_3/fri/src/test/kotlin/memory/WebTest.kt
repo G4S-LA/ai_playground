@@ -30,6 +30,9 @@ class WebTest {
         val categories = client.get("/api/categories")
         assertEquals(HttpStatusCode.OK, categories.status)
 
+        val prematureApproval = client.post("/api/sessions/${session.id}/tasks/approve")
+        assertEquals(HttpStatusCode.Conflict, prematureApproval.status)
+
         val remembered = client.post("/api/sessions/${session.id}/memories") {
             header(HttpHeaders.ContentType, ContentType.Application.Json)
             setBody("""{"layer":"working","category":"goal","content":"Показать память"}""")
@@ -42,19 +45,27 @@ class WebTest {
         }
         assertEquals(HttpStatusCode.OK, reply.status)
         val replyBody = reply.bodyAsText()
-        for (stage in listOf("planning", "execution", "validation", "done")) {
-            assertTrue(replyBody.contains("\"stage\": \"$stage\""), replyBody)
-        }
+        assertTrue(replyBody.contains("\"stage\": \"planning\""), replyBody)
         assertTrue(replyBody.contains("\"planningApplied\": true"), replyBody)
-        assertTrue(replyBody.contains("\"planApproved\": true"), replyBody)
+        assertTrue(replyBody.contains("\"planReady\": true"), replyBody)
+        assertTrue(replyBody.contains("\"planApproved\": false"), replyBody)
+
+        val approved = client.post("/api/sessions/${session.id}/tasks/approve")
+        assertEquals(HttpStatusCode.OK, approved.status)
+        val approvedBody = approved.bodyAsText()
+        for (stage in listOf("execution", "validation", "done")) {
+            assertTrue(approvedBody.contains("\"stage\": \"$stage\""), approvedBody)
+        }
+        assertTrue(approvedBody.contains("\"planApproved\": true"), approvedBody)
 
         val snapshot = client.get("/api/sessions/${session.id}")
         assertEquals(HttpStatusCode.OK, snapshot.status)
         val snapshotBody = snapshot.bodyAsText()
         assertTrue(snapshotBody.contains("Показать память"))
         assertTrue(snapshotBody.contains("Реализуй CLI и web-интерфейс"))
-        assertTrue(snapshotBody.contains("Ответ проверен и готов"))
+        assertTrue(snapshotBody.contains("Результат проверен и готов"))
         assertTrue(snapshotBody.contains("agent_plan"))
+        assertTrue(snapshotBody.contains("agent_task"))
 
         val deleted = client.delete("/api/sessions/${session.id}")
         assertEquals(HttpStatusCode.OK, deleted.status)

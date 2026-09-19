@@ -86,12 +86,28 @@ class FileMemoryStore(
     }
 
     @Synchronized
-    fun clearWorkingPlan(sessionId: String) {
+    fun replaceWorkingTask(sessionId: String, content: String): MemoryItem {
+        requireSession(sessionId)
+        val item = MemoryItem(
+            id = UUID.randomUUID().toString(),
+            category = "agent_task",
+            content = validateContent(content),
+            createdAt = Instant.now().toString(),
+        )
+        val withoutOldTask = readMemories(workingFile(sessionId)).filterNot {
+            it.category == "agent_task"
+        }
+        writeAtomic(workingFile(sessionId), MemoryDocument(withoutOldTask + item))
+        return item
+    }
+
+    @Synchronized
+    fun clearAgentTaskContext(sessionId: String) {
         requireSession(sessionId)
         val current = readMemories(workingFile(sessionId))
-        val withoutPlan = current.filterNot { it.category == "agent_plan" }
-        if (withoutPlan.size != current.size) {
-            writeAtomic(workingFile(sessionId), MemoryDocument(withoutPlan))
+        val updated = current.filterNot { it.category == "agent_plan" || it.category == "agent_task" }
+        if (updated.size != current.size) {
+            writeAtomic(workingFile(sessionId), MemoryDocument(updated))
         }
     }
 

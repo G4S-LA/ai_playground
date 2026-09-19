@@ -34,7 +34,7 @@
             placeholder="Введите запрос…" required></textarea>
           <button id="send-button" class="primary-button" type="submit">Отправить</button>
         </form>
-        <p class="hint">Enter — отправить · обычная переписка остаётся в краткосрочной памяти</p>
+        <p class="hint">На этапе planning сообщение считается замечанием к плану · Enter — отправить</p>
       </section>
 
       <aside class="sidebar memory-panel" aria-labelledby="task-panel-title">
@@ -62,8 +62,12 @@
             <div><dt>Текущий шаг</dt><dd id="task-step">—</dd></div>
             <div><dt>Ожидаемое действие</dt><dd id="expected-action">Ожидается запрос пользователя</dd></div>
             <div><dt>Разрешённые события</dt><dd id="allowed-events">start_task</dd></div>
+            <div><dt>Статус плана</dt><dd id="plan-status">План ещё не создан</dd></div>
             <div id="failure-row" hidden><dt>Причина остановки</dt><dd id="failure-reason"></dd></div>
           </dl>
+          <button id="approve-plan" class="approve-plan-button" type="button" hidden>
+            Утвердить план и выполнить
+          </button>
           <p id="state-status" class="memory-status" role="status">
             Введите запрос: агент начнёт с обязательного этапа planning.
           </p>

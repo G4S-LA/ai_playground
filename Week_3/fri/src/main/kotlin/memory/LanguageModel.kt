@@ -75,6 +75,13 @@ class DemoLanguageModel : LanguageModel {
             ?.content?.lineSequence()?.firstOrNull { it.startsWith("stage: ") }
             ?.substringAfter("stage: ") ?: "unknown"
         if (stage == TaskStage.PLANNING.wireName) {
+            val feedback = messages.lastOrNull {
+                it.role == "user" && it.content.startsWith("Замечания к плану:")
+            }?.content?.substringAfter("Замечания к плану:")?.trim()
+            if (!feedback.isNullOrEmpty()) {
+                return "1. Учесть замечание: ${feedback.take(100)}.\n" +
+                    "2. Выполнить основные действия.\n3. Проверить результат."
+            }
             return "1. Уточнить требования запроса.\n2. Выполнить основные действия.\n3. Проверить результат."
         }
         if (stage == TaskStage.VALIDATION.wireName) return "VALID"

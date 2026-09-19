@@ -219,6 +219,18 @@ textarea:focus, select:focus { outline: 3px solid rgba(109, 40, 217, .15); borde
 .state-readout div { display: grid; gap: 2px; padding: 8px; border-radius: 8px; background: #28255f; }
 .state-readout dt { color: #aaa7d1; font-size: 9px; font-weight: 800; text-transform: uppercase; }
 .state-readout dd { margin: 0; color: #f5f3ff; font-size: 11px; overflow-wrap: anywhere; }
+.approve-plan-button {
+  width: 100%;
+  min-height: 38px;
+  margin: 10px 0;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 9px;
+  color: #241c5a;
+  background: #bbf7d0;
+  font-weight: 800;
+}
+.approve-plan-button:hover { background: #86efac; }
 .memory-section-title { margin: 0 0 10px; }
 .layer {
   margin-bottom: 12px;

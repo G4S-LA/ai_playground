@@ -19,90 +19,78 @@ class MemoryAgent(
 
     fun snapshot(sessionId: String): AgentSnapshot = store.snapshot(sessionId).withModel()
 
+    /**
+     * Новый запрос создаёт план и оставляет задачу в planning. Сообщение, присланное
+     * во время planning, считается замечанием к плану. Из blocked оно уточняет задачу.
+     */
     @Synchronized
     fun reply(
         sessionId: String,
         rawMessage: String,
         onStateChange: (TaskState) -> Unit = {},
     ): MessageResponse {
-        val message = rawMessage.trim()
-        require(message.isNotEmpty()) { "Введите непустое сообщение." }
-        require(message.length <= 4_000) { "Сообщение не должно превышать 4000 символов." }
-
+        val message = validateMessage(rawMessage)
         val trace = mutableListOf<TaskState>()
-        try {
-            val initialStage = store.snapshot(sessionId).taskState.stageValue()
-            if (initialStage == TaskStage.BLOCKED) {
-                emit(
-                    move(sessionId, TaskEvent.RESUME, "Продолжить задачу с учётом уточнения"),
-                    trace,
-                    onStateChange,
+        return try {
+            when (store.snapshot(sessionId).taskState.stageValue()) {
+                TaskStage.IDLE, TaskStage.DONE, TaskStage.FAILED ->
+                    createPlan(sessionId, message, trace, onStateChange)
+                TaskStage.PLANNING ->
+                    revisePlan(sessionId, message, trace, onStateChange)
+                TaskStage.BLOCKED -> {
+                    val task = requiredWorking(sessionId, "agent_task")
+                    emit(
+                        move(sessionId, TaskEvent.RESUME, "Продолжить реализацию с учётом уточнения"),
+                        trace,
+                        onStateChange,
+                    )
+                    executeAndValidate(
+                        sessionId = sessionId,
+                        query = "$task\n\nУточнение пользователя:\n$message",
+                        transcriptUserText = message,
+                        trace = trace,
+                        callback = onStateChange,
+                    )
+                }
+                TaskStage.EXECUTION, TaskStage.VALIDATION -> throw LifecycleException(
+                    "Задача уже выполняется. Дождитесь завершения текущего этапа."
                 )
-            } else {
-                store.clearWorkingPlan(sessionId)
-                startNewTask(sessionId, message, trace, onStateChange)
             }
+        } catch (error: AgentException) {
+            markFailed(sessionId, error.message ?: "Неизвестная ошибка модели", trace, onStateChange)
+            throw error
+        }
+    }
 
-            var answer = requireOutput(
-                model.complete(promptBuilder.build(store.snapshot(sessionId), message)),
-                "Модель вернула пустой ответ.",
+    /** Явный approval gate: только этот метод открывает planning → execution. */
+    @Synchronized
+    fun approvePlan(
+        sessionId: String,
+        onStateChange: (TaskState) -> Unit = {},
+    ): MessageResponse {
+        val trace = mutableListOf<TaskState>()
+        return try {
+            val snapshot = store.snapshot(sessionId)
+            if (snapshot.taskState.stageValue() != TaskStage.PLANNING) {
+                throw LifecycleException("Утвердить план можно только на этапе planning.")
+            }
+            if (!snapshot.taskState.planReady) {
+                throw LifecycleException("План ещё не подготовлен.")
+            }
+            val task = requiredWorking(sessionId, "agent_task")
+            requiredWorking(sessionId, "agent_plan")
+            emit(
+                move(sessionId, TaskEvent.APPROVE_PLAN, "Выполнить утверждённый план"),
+                trace,
+                onStateChange,
             )
-            var validationAttempt = 0
-            while (true) {
-                emit(
-                    move(
-                        sessionId,
-                        TaskEvent.COMPLETE_EXECUTION,
-                        "Проверить полноту и корректность ответа",
-                    ),
-                    trace,
-                    onStateChange,
-                )
-                val feedback = validationFeedback(
-                    model.complete(promptBuilder.buildValidation(store.snapshot(sessionId), message, answer))
-                )
-                if (feedback == null) {
-                    emit(
-                        move(sessionId, TaskEvent.PASS_VALIDATION, "Ответ проверен и готов"),
-                        trace,
-                        onStateChange,
-                    )
-                    store.appendTurn(sessionId, message, answer, trace)
-                    return MessageResponse(answer, snapshot(sessionId))
-                }
-
-                if (validationAttempt == MAX_VALIDATION_ATTEMPTS - 1) {
-                    emit(
-                        move(
-                            sessionId,
-                            TaskEvent.EXHAUST_VALIDATION,
-                            "Ожидается уточнение пользователя",
-                            feedback,
-                        ),
-                        trace,
-                        onStateChange,
-                    )
-                    store.appendTurn(sessionId, message, CLARIFICATION_RESPONSE, trace)
-                    return MessageResponse(CLARIFICATION_RESPONSE, snapshot(sessionId))
-                }
-
-                emit(
-                    move(
-                        sessionId,
-                        TaskEvent.REJECT_VALIDATION,
-                        "Исправить ответ по замечаниям проверки",
-                    ),
-                    trace,
-                    onStateChange,
-                )
-                answer = requireOutput(
-                    model.complete(
-                        promptBuilder.buildRevision(store.snapshot(sessionId), message, answer, feedback)
-                    ),
-                    "Модель не вернула исправленный ответ.",
-                )
-                validationAttempt += 1
-            }
+            executeAndValidate(
+                sessionId = sessionId,
+                query = task,
+                transcriptUserText = "План утверждён.",
+                trace = trace,
+                callback = onStateChange,
+            )
         } catch (error: AgentException) {
             markFailed(sessionId, error.message ?: "Неизвестная ошибка модели", trace, onStateChange)
             throw error
@@ -130,14 +118,16 @@ class MemoryAgent(
     fun promptPreview(sessionId: String, query: String): List<PromptMessage> =
         promptBuilder.build(store.snapshot(sessionId), query)
 
-    private fun startNewTask(
+    private fun createPlan(
         sessionId: String,
         message: String,
         trace: MutableList<TaskState>,
         callback: (TaskState) -> Unit,
-    ) {
+    ): MessageResponse {
+        store.clearAgentTaskContext(sessionId)
+        store.replaceWorkingTask(sessionId, message)
         emit(
-            move(sessionId, TaskEvent.START_TASK, "Составить план выполнения запроса"),
+            move(sessionId, TaskEvent.START_TASK, "Составить план выполнения задачи"),
             trace,
             callback,
         )
@@ -147,10 +137,123 @@ class MemoryAgent(
         )
         store.replaceWorkingPlan(sessionId, plan)
         emit(
-            move(sessionId, TaskEvent.APPROVE_PLAN, "Выполнить утверждённый план"),
+            move(
+                sessionId,
+                TaskEvent.PLAN_READY,
+                "Утвердить план или прислать замечания",
+            ),
             trace,
             callback,
         )
+        store.appendTurn(sessionId, message, plan, trace)
+        return MessageResponse(plan, snapshot(sessionId))
+    }
+
+    private fun revisePlan(
+        sessionId: String,
+        feedback: String,
+        trace: MutableList<TaskState>,
+        callback: (TaskState) -> Unit,
+    ): MessageResponse {
+        val task = requiredWorking(sessionId, "agent_task")
+        val currentPlan = requiredWorking(sessionId, "agent_plan")
+        emit(
+            move(sessionId, TaskEvent.REVISE_PLAN, "Пересоставить план по замечаниям"),
+            trace,
+            callback,
+        )
+        val revisedPlan = requireOutput(
+            model.complete(
+                promptBuilder.buildPlanRevision(
+                    store.snapshot(sessionId),
+                    task,
+                    currentPlan,
+                    feedback,
+                )
+            ),
+            "Модель не пересоставила план.",
+        )
+        store.replaceWorkingPlan(sessionId, revisedPlan)
+        emit(
+            move(
+                sessionId,
+                TaskEvent.PLAN_READY,
+                "Утвердить обновлённый план или прислать замечания",
+            ),
+            trace,
+            callback,
+        )
+        store.appendTurn(sessionId, feedback, revisedPlan, trace)
+        return MessageResponse(revisedPlan, snapshot(sessionId))
+    }
+
+    private fun executeAndValidate(
+        sessionId: String,
+        query: String,
+        transcriptUserText: String,
+        trace: MutableList<TaskState>,
+        callback: (TaskState) -> Unit,
+    ): MessageResponse {
+        var answer = requireOutput(
+            model.complete(promptBuilder.build(store.snapshot(sessionId), query)),
+            "Модель вернула пустой результат реализации.",
+        )
+        var validationAttempt = 0
+        while (true) {
+            emit(
+                move(
+                    sessionId,
+                    TaskEvent.COMPLETE_EXECUTION,
+                    "Проверить результат относительно цели задачи",
+                ),
+                trace,
+                callback,
+            )
+            val feedback = validationFeedback(
+                model.complete(promptBuilder.buildValidation(store.snapshot(sessionId), query, answer))
+            )
+            if (feedback == null) {
+                emit(
+                    move(sessionId, TaskEvent.PASS_VALIDATION, "Результат проверен и готов"),
+                    trace,
+                    callback,
+                )
+                store.appendTurn(sessionId, transcriptUserText, answer, trace)
+                return MessageResponse(answer, snapshot(sessionId))
+            }
+
+            if (validationAttempt == MAX_VALIDATION_ATTEMPTS - 1) {
+                emit(
+                    move(
+                        sessionId,
+                        TaskEvent.EXHAUST_VALIDATION,
+                        "Ожидается уточнение пользователя",
+                        feedback,
+                    ),
+                    trace,
+                    callback,
+                )
+                store.appendTurn(sessionId, transcriptUserText, CLARIFICATION_RESPONSE, trace)
+                return MessageResponse(CLARIFICATION_RESPONSE, snapshot(sessionId))
+            }
+
+            emit(
+                move(
+                    sessionId,
+                    TaskEvent.REJECT_VALIDATION,
+                    "Исправить реализацию по замечаниям проверки",
+                ),
+                trace,
+                callback,
+            )
+            answer = requireOutput(
+                model.complete(
+                    promptBuilder.buildRevision(store.snapshot(sessionId), query, answer, feedback)
+                ),
+                "Модель не вернула исправленный результат.",
+            )
+            validationAttempt += 1
+        }
     }
 
     private fun move(
@@ -183,6 +286,10 @@ class MemoryAgent(
         if (result is TransitionResult.Accepted) emit(result.state, trace, callback)
     }
 
+    private fun requiredWorking(sessionId: String, category: String): String =
+        store.snapshot(sessionId).working.lastOrNull { it.category == category }?.content
+            ?: throw LifecycleException("В рабочей памяти отсутствует $category.")
+
     private fun emit(
         state: TaskState,
         trace: MutableList<TaskState>,
@@ -190,6 +297,11 @@ class MemoryAgent(
     ) {
         trace += state
         callback(state)
+    }
+
+    private fun validateMessage(raw: String): String = raw.trim().also {
+        require(it.isNotEmpty()) { "Введите непустое сообщение." }
+        require(it.length <= 4_000) { "Сообщение не должно превышать 4000 символов." }
     }
 
     private fun requireOutput(raw: String, errorMessage: String): String = raw.trim().also {
@@ -204,7 +316,7 @@ class MemoryAgent(
         if (firstLine.startsWith("REVISE")) {
             val inline = lines.first().substringAfter(':', "").trim()
             return (listOf(inline) + lines.drop(1)).joinToString("\n").trim()
-                .ifEmpty { "Исправить ответ согласно результату проверки." }
+                .ifEmpty { "Исправить результат согласно проверке." }
         }
         throw AgentException("Не удалось распознать результат проверки модели: ${verdict.take(160)}")
     }

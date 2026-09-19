@@ -28,6 +28,26 @@ class PromptBuilder(private val systemPrompt: String) {
         add(PromptMessage("user", "Проверь приведённый черновик и вынеси вердикт."))
     }
 
+    fun buildPlanRevision(
+        snapshot: MemorySnapshot,
+        task: String,
+        currentPlan: String,
+        feedback: String,
+    ): List<PromptMessage> = buildList {
+        addAll(context(snapshot))
+        add(PromptMessage(
+            "system",
+            """
+            Пересоставь план задачи с учётом замечаний пользователя.
+            Верни только обновлённый краткий нумерованный план. Не приступай к
+            реализации и не выдавай итоговый результат задачи.
+            """.trimIndent(),
+        ))
+        add(PromptMessage("user", "Исходная задача:\n$task"))
+        add(PromptMessage("assistant", currentPlan))
+        add(PromptMessage("user", "Замечания к плану:\n$feedback"))
+    }
+
     fun buildRevision(
         snapshot: MemorySnapshot,
         query: String,
@@ -77,6 +97,7 @@ class PromptBuilder(private val systemPrompt: String) {
         appendLine("stage: ${state.stage}")
         appendLine("current_step: ${state.currentStep}")
         appendLine("expected_action: ${state.expectedAction}")
+        appendLine("plan_ready: ${state.planReady}")
         appendLine("plan_approved: ${state.planApproved}")
         appendLine("validation_attempts: ${state.validationAttempts}")
         appendLine(stageInstruction(state.stageValue()))

@@ -26,8 +26,9 @@ enum class TaskStage(val wireName: String) {
  */
 enum class TaskEvent(val wireName: String) {
     START_TASK("start_task"),
+    PLAN_READY("plan_ready"),
+    REVISE_PLAN("revise_plan"),
     APPROVE_PLAN("approve_plan"),
-    REQUEST_REPLANNING("request_replanning"),
     COMPLETE_EXECUTION("complete_execution"),
     PASS_VALIDATION("pass_validation"),
     REJECT_VALIDATION("reject_validation"),
@@ -44,6 +45,7 @@ data class TaskState(
     val expectedAction: String,
     val updatedAt: String,
     val planningApplied: Boolean = false,
+    val planReady: Boolean = false,
     val planApproved: Boolean = false,
     val validationAttempts: Int = 0,
     val recoveryStage: String? = null,
@@ -68,6 +70,7 @@ data class TaskStateView(
     val updatedAt: String,
     val allowedEvents: List<String>,
     val planningApplied: Boolean,
+    val planReady: Boolean,
     val planApproved: Boolean,
     val validationAttempts: Int,
     val recoveryStage: String?,
@@ -118,13 +121,18 @@ class TaskStateMachine {
 
         val starting = event == TaskEvent.START_TASK
         val planningApplied = when (event) {
-            TaskEvent.START_TASK, TaskEvent.REQUEST_REPLANNING -> true
+            TaskEvent.START_TASK -> true
             else -> current.planningApplied
         }
         val planApproved = when (event) {
             TaskEvent.APPROVE_PLAN -> true
-            TaskEvent.START_TASK, TaskEvent.REQUEST_REPLANNING -> false
+            TaskEvent.START_TASK, TaskEvent.REVISE_PLAN -> false
             else -> current.planApproved
+        }
+        val planReady = when (event) {
+            TaskEvent.PLAN_READY, TaskEvent.APPROVE_PLAN -> true
+            TaskEvent.START_TASK, TaskEvent.REVISE_PLAN -> false
+            else -> current.planReady
         }
         val validationAttempts = when (event) {
             TaskEvent.START_TASK, TaskEvent.RESUME, TaskEvent.RETRY -> 0
@@ -144,6 +152,7 @@ class TaskStateMachine {
             expectedAction = normalizedAction,
             updatedAt = Instant.now().toString(),
             planningApplied = planningApplied,
+            planReady = planReady,
             planApproved = planApproved,
             validationAttempts = validationAttempts,
             recoveryStage = recoveryStage,
@@ -159,14 +168,13 @@ class TaskStateMachine {
 
     fun allowedEvents(state: TaskState): Set<TaskEvent> = when (state.stageValue()) {
         TaskStage.IDLE, TaskStage.DONE -> setOf(TaskEvent.START_TASK)
-        TaskStage.PLANNING -> setOf(
-            TaskEvent.APPROVE_PLAN,
-            TaskEvent.BLOCK,
-            TaskEvent.FAIL,
-        )
+        TaskStage.PLANNING -> if (state.planReady) {
+            setOf(TaskEvent.APPROVE_PLAN, TaskEvent.REVISE_PLAN, TaskEvent.BLOCK, TaskEvent.FAIL)
+        } else {
+            setOf(TaskEvent.PLAN_READY, TaskEvent.BLOCK, TaskEvent.FAIL)
+        }
         TaskStage.EXECUTION -> setOf(
             TaskEvent.COMPLETE_EXECUTION,
-            TaskEvent.REQUEST_REPLANNING,
             TaskEvent.BLOCK,
             TaskEvent.FAIL,
         )
@@ -191,6 +199,7 @@ class TaskStateMachine {
         updatedAt = state.updatedAt,
         allowedEvents = allowedEvents(state).map { it.wireName },
         planningApplied = state.planningApplied,
+        planReady = state.planReady,
         planApproved = state.planApproved,
         validationAttempts = state.validationAttempts,
         recoveryStage = state.recoveryStage,
@@ -198,7 +207,7 @@ class TaskStateMachine {
     )
 
     private fun targetFor(current: TaskState, event: TaskEvent): TaskStage = when (event) {
-        TaskEvent.START_TASK, TaskEvent.REQUEST_REPLANNING -> TaskStage.PLANNING
+        TaskEvent.START_TASK, TaskEvent.PLAN_READY, TaskEvent.REVISE_PLAN -> TaskStage.PLANNING
         TaskEvent.APPROVE_PLAN, TaskEvent.REJECT_VALIDATION -> TaskStage.EXECUTION
         TaskEvent.COMPLETE_EXECUTION -> TaskStage.VALIDATION
         TaskEvent.PASS_VALIDATION -> TaskStage.DONE

@@ -23,9 +23,10 @@ class TaskStateMachineTest {
         assertIs<TransitionResult.Rejected>(rejected)
         assertSame(planning, rejected.state)
         assertTrue(rejected.reason.contains("до утверждения плана"))
-        assertEquals(listOf("approve_plan", "block", "fail"), rejected.allowedEvents)
+        assertEquals(listOf("plan_ready", "block", "fail"), rejected.allowedEvents)
 
-        val execution = accepted(planning, TaskEvent.APPROVE_PLAN, "Выполнить утверждённый план")
+        val ready = accepted(planning, TaskEvent.PLAN_READY, "Утвердить план")
+        val execution = accepted(ready, TaskEvent.APPROVE_PLAN, "Выполнить утверждённый план")
         assertEquals("execution", execution.stage)
         assertTrue(execution.planningApplied)
         assertTrue(execution.planApproved)
@@ -34,7 +35,8 @@ class TaskStateMachineTest {
     @Test
     fun `done cannot be reached without validation`() {
         val planning = accepted(TaskState.initial(), TaskEvent.START_TASK, "Составить план")
-        val execution = accepted(planning, TaskEvent.APPROVE_PLAN, "Выполнить план")
+        val ready = accepted(planning, TaskEvent.PLAN_READY, "Утвердить план")
+        val execution = accepted(ready, TaskEvent.APPROVE_PLAN, "Выполнить план")
 
         val skippedValidation = machine.dispatch(
             execution,
@@ -54,7 +56,8 @@ class TaskStateMachineTest {
     @Test
     fun `failed validation returns to execution and retry exhaustion blocks task`() {
         val planning = accepted(TaskState.initial(), TaskEvent.START_TASK, "Составить план")
-        val execution = accepted(planning, TaskEvent.APPROVE_PLAN, "Выполнить план")
+        val ready = accepted(planning, TaskEvent.PLAN_READY, "Утвердить план")
+        val execution = accepted(ready, TaskEvent.APPROVE_PLAN, "Выполнить план")
         val firstValidation = accepted(execution, TaskEvent.COMPLETE_EXECUTION, "Проверить")
         val revision = accepted(firstValidation, TaskEvent.REJECT_VALIDATION, "Исправить замечания")
         assertEquals("execution", revision.stage)
@@ -81,7 +84,8 @@ class TaskStateMachineTest {
     @Test
     fun `technical failure is explicit and can be retried from failed stage`() {
         val planning = accepted(TaskState.initial(), TaskEvent.START_TASK, "Составить план")
-        val execution = accepted(planning, TaskEvent.APPROVE_PLAN, "Выполнить план")
+        val ready = accepted(planning, TaskEvent.PLAN_READY, "Утвердить план")
+        val execution = accepted(ready, TaskEvent.APPROVE_PLAN, "Выполнить план")
         val failed = accepted(execution, TaskEvent.FAIL, "Повторить попытку", "Модель недоступна")
 
         assertEquals("failed", failed.stage)

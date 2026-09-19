@@ -41,6 +41,9 @@ fun Application.memoryModule(agent: MemoryAgent) {
         exception<AgentException> { call, error ->
             call.respond(HttpStatusCode.BadGateway, ErrorResponse(error.message ?: "Ошибка модели."))
         }
+        exception<LifecycleException> { call, error ->
+            call.respond(HttpStatusCode.Conflict, ErrorResponse(error.message ?: "Переход недоступен."))
+        }
         exception<Throwable> { call, error ->
             applicationLog.error("Unhandled request error", error)
             call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Внутренняя ошибка сервера."))
@@ -77,6 +80,9 @@ fun Application.memoryModule(agent: MemoryAgent) {
                 post("/messages") {
                     val request = call.receive<MessageRequest>()
                     call.respond(agent.reply(call.sessionId(), request.message))
+                }
+                post("/tasks/approve") {
+                    call.respond(agent.approvePlan(call.sessionId()))
                 }
                 post("/memories") {
                     val request = call.receive<RememberRequest>()
