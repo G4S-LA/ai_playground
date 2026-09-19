@@ -9,7 +9,7 @@ class MemoryAgent(
     private val model: LanguageModel,
     systemPrompt: String,
     private val modelName: String,
-    private val planningPolicy: PlanningPolicy = RequestComplexityPolicy(),
+    private val planningPolicy: PlanningPolicy = LlmPlanningPolicy(model),
 ) {
     private val promptBuilder = PromptBuilder(systemPrompt)
     private val stateMachine = TaskStateMachine()
