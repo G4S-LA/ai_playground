@@ -28,33 +28,59 @@
         </form>
       </section>
 
-      <aside class="control-panel">
-        <section class="panel panel--invariants">
-          <div class="panel__title"><div><p class="eyebrow">Не память</p><h2>Инварианты</h2></div><span id="invariant-count">0</span></div>
+      <aside class="control-panel" aria-labelledby="control-title">
+        <div class="control-heading">
+          <p class="eyebrow">Явное управление</p>
+          <h2 id="control-title">Правила и память</h2>
+        </div>
+
+        <section class="layer layer--invariants">
+          <div class="layer__heading">
+            <div><span class="layer__dot"></span><h3>Инварианты</h3></div>
+            <span id="invariant-count" class="layer__count">0</span>
+          </div>
           <p>Глобальные обязательные правила с приоритетом над запросом.</p>
           <div id="invariant-list" class="item-list"></div>
-          <form id="invariant-form" class="compact-form">
+          <form id="invariant-form" class="inline-form">
+            <label for="invariant-category">Тип правила</label>
             <select id="invariant-category" aria-label="Категория инварианта" required></select>
+            <label for="invariant-content">Формулировка</label>
             <textarea id="invariant-content" rows="2" maxlength="4000" placeholder="Например: запрещено использовать Python" required></textarea>
-            <button class="button button--danger" type="submit">Добавить инвариант</button>
+            <button class="panel-button panel-button--invariant" type="submit">Добавить инвариант</button>
           </form>
         </section>
 
-        <section class="panel">
-          <div class="panel__title"><div><p class="eyebrow">Изменяемый контекст</p><h2>Память</h2></div></div>
-          <div class="memory-columns">
-            <div><h3>Рабочая <span id="working-count">0</span></h3><div id="working-list" class="item-list"></div></div>
-            <div><h3>Долговременная <span id="long-count">0</span></h3><div id="long-list" class="item-list"></div></div>
+        <section class="layer layer--working">
+          <div class="layer__heading">
+            <div><span class="layer__dot"></span><h3>Рабочая память</h3></div>
+            <span id="working-count" class="layer__count">0</span>
           </div>
-          <form id="memory-form" class="compact-form">
-            <div class="form-row">
-              <select id="memory-layer" required><option value="working">Рабочая</option><option value="long_term">Долговременная</option></select>
-              <select id="memory-category" required></select>
-            </div>
-            <textarea id="memory-content" rows="2" maxlength="4000" placeholder="Контекст текущей задачи" required></textarea>
-            <button class="button button--quiet" type="submit">Сохранить в память</button>
-          </form>
+          <p>Цель, контекст и ограничения текущей задачи.</p>
+          <div id="working-list" class="item-list"></div>
         </section>
+
+        <section class="layer layer--long">
+          <div class="layer__heading">
+            <div><span class="layer__dot"></span><h3>Долговременная память</h3></div>
+            <span id="long-count" class="layer__count">0</span>
+          </div>
+          <p>Профиль, решения и знания — общие для всех диалогов.</p>
+          <div id="long-list" class="item-list"></div>
+        </section>
+
+        <form id="memory-form" class="panel-form">
+          <h3>Сохранить в память</h3>
+          <label for="memory-layer">Слой</label>
+          <select id="memory-layer" required>
+            <option value="working">Рабочая</option>
+            <option value="long_term">Долговременная</option>
+          </select>
+          <label for="memory-category">Тип записи</label>
+          <select id="memory-category" required></select>
+          <label for="memory-content">Что запомнить</label>
+          <textarea id="memory-content" rows="3" maxlength="4000" placeholder="Например: дедлайн — пятница" required></textarea>
+          <button class="panel-button" type="submit">Сохранить явно</button>
+        </form>
       </aside>
     </main>
     <script src="/static/app.js"></script>
