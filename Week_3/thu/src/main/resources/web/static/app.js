@@ -158,12 +158,30 @@ $("#message-input").addEventListener("keydown", (event) => {
 $("#chat-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const message = $("#message-input").value.trim();
-  if (!message) return;
+  if (!message || busy) return;
   run(async () => {
+    if (!(currentSnapshot.session.messages || []).length) $("#messages").replaceChildren();
+    const userMessage = addMessage("user", message);
+    const pending = addMessage("assistant", "");
+    pending.classList.add("message--pending");
+    const indicator = document.createElement("span");
+    indicator.className = "pending-indicator";
+    indicator.setAttribute("aria-hidden", "true");
+    indicator.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
+    const status = document.createElement("span");
+    status.textContent = "Формирую ответ и проверяю инварианты…";
+    pending.replaceChildren(indicator, status);
     $("#message-input").value = "";
-    const result = await requestJson(sessionUrl("/messages"), jsonOptions("POST", {message}));
-    renderSnapshot(result.snapshot);
-    await refreshSessions();
+    try {
+      const result = await requestJson(sessionUrl("/messages"), jsonOptions("POST", {message}));
+      renderSnapshot(result.snapshot);
+      await refreshSessions();
+    } catch (error) {
+      userMessage.remove();
+      pending.remove();
+      $("#message-input").value = message;
+      throw error;
+    }
   });
 });
 
