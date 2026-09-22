@@ -35,6 +35,25 @@ function renderMessages(entries) {
   entries.forEach((entry) => addMessage(entry.role, entry.content));
 }
 
+function showTypingIndicator() {
+  const article = document.createElement("article");
+  article.className = "message message--assistant message--typing";
+  article.setAttribute("role", "status");
+  article.setAttribute("aria-label", "Агент пишет ответ");
+
+  const label = document.createElement("span");
+  label.textContent = "Агент";
+  const dots = document.createElement("div");
+  dots.className = "typing-dots";
+  dots.setAttribute("aria-hidden", "true");
+  dots.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
+
+  article.append(label, dots);
+  messages.append(article);
+  messages.scrollTop = messages.scrollHeight;
+  return article;
+}
+
 async function request(url, options) {
   const response = await fetch(url, options);
   const payload = await response.json();
@@ -94,6 +113,7 @@ form.addEventListener("submit", async (event) => {
   const message = input.value.trim();
   if (!message || !currentSessionId) return;
   addMessage("user", message);
+  const typingIndicator = showTypingIndicator();
   input.value = "";
   send.disabled = true;
   try {
@@ -102,9 +122,11 @@ form.addEventListener("submit", async (event) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message }),
     });
+    typingIndicator.remove();
     addMessage("assistant", payload.answer, payload.toolExecutions);
     await loadSessions(currentSessionId);
   } catch (error) {
+    typingIndicator.remove();
     addMessage("assistant", `Ошибка: ${error.message}`);
   } finally {
     send.disabled = false;

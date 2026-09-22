@@ -28,6 +28,13 @@ class WebTest {
         assertFalse("Слои памяти" in html)
         assertFalse("Планирование" in html)
 
+        val script = client.get("/static/app.js")
+        assertEquals(HttpStatusCode.OK, script.status)
+        assertTrue("showTypingIndicator" in script.body<String>())
+        val styles = client.get("/static/styles.css")
+        assertEquals(HttpStatusCode.OK, styles.status)
+        assertTrue("@keyframes typing-bounce" in styles.body<String>())
+
         val tools = client.get("/api/tools")
         assertEquals(HttpStatusCode.OK, tools.status)
         assertTrue(GIT_SUMMARY_TOOL in tools.body<String>())
