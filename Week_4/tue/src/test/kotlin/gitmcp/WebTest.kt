@@ -33,7 +33,10 @@ class WebTest {
         assertTrue("showTypingIndicator" in script.body<String>())
         val styles = client.get("/static/styles.css")
         assertEquals(HttpStatusCode.OK, styles.status)
-        assertTrue("@keyframes typing-bounce" in styles.body<String>())
+        val css = styles.body<String>()
+        assertTrue("@keyframes typing-bounce" in css)
+        assertTrue("height: 100dvh" in css)
+        assertTrue(".messages { flex: 1; min-height: 0; overflow-y: auto" in css)
 
         val tools = client.get("/api/tools")
         assertEquals(HttpStatusCode.OK, tools.status)
