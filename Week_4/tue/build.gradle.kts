@@ -12,12 +12,20 @@ repositories {
     mavenCentral()
 }
 
+val ktorVersion = "3.5.1"
+
 dependencies {
     implementation("io.modelcontextprotocol:kotlin-sdk:0.15.0")
     implementation("io.github.oshai:kotlin-logging-jvm:8.0.4")
-    runtimeOnly("org.slf4j:slf4j-simple:2.0.17")
+    implementation("io.ktor:ktor-server-core-jvm:$ktorVersion")
+    implementation("io.ktor:ktor-server-netty-jvm:$ktorVersion")
+    implementation("io.ktor:ktor-server-content-negotiation-jvm:$ktorVersion")
+    implementation("io.ktor:ktor-server-status-pages-jvm:$ktorVersion")
+    implementation("io.ktor:ktor-serialization-gson-jvm:$ktorVersion")
+    implementation("ch.qos.logback:logback-classic:1.6.0")
 
     testImplementation(kotlin("test"))
+    testImplementation("io.ktor:ktor-server-test-host-jvm:$ktorVersion")
 }
 
 kotlin {
@@ -33,7 +41,10 @@ java {
 
 application {
     mainClass.set("gitmcp.MainKt")
-    applicationDefaultJvmArgs = listOf("-Dorg.slf4j.simpleLogger.defaultLogLevel=warn")
+}
+
+tasks.named<JavaExec>("run") {
+    standardInput = System.`in`
 }
 
 tasks.test {

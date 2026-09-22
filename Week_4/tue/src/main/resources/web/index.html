@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Git MCP Agent</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="header">
+        <div>
+          <p class="eyebrow">MCP · Git</p>
+          <h1>Git Agent</h1>
+          <p class="subtitle">Агент вызывает локальный MCP-инструмент и отвечает по данным репозитория.</p>
+        </div>
+        <button id="delete-session" class="secondary" type="button">Удалить чат</button>
+      </header>
+
+      <section class="content">
+        <aside class="chats" aria-labelledby="chats-title">
+          <p class="eyebrow">История</p>
+          <h2 id="chats-title">Диалоги</h2>
+          <button id="new-session" class="new-session" type="button">+ Новый чат</button>
+          <nav id="session-list" class="session-list" aria-label="Диалоги"></nav>
+        </aside>
+
+        <section class="chat" aria-label="Чат с агентом">
+          <div id="messages" class="messages" aria-live="polite"></div>
+          <form id="chat-form" class="composer">
+            <label class="visually-hidden" for="message">Сообщение</label>
+            <textarea id="message" maxlength="4000" rows="3"
+              placeholder="Например: какие последние изменения в репозитории?" required></textarea>
+            <button id="send" type="submit">Отправить</button>
+          </form>
+        </section>
+
+        <aside class="tools" aria-labelledby="tools-title">
+          <p class="eyebrow">Подключение</p>
+          <h2 id="tools-title">MCP-инструменты</h2>
+          <div id="tool-list" class="tool-list"><p>Загрузка…</p></div>
+          <p class="tool-note">Список получен от Git MCP-сервера через <code>tools/list</code>.</p>
+        </aside>
+      </section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

@@ -2,23 +2,33 @@ package gitmcp
 
 import io.github.oshai.kotlinlogging.KotlinLoggingConfiguration
 import kotlinx.coroutines.runBlocking
-import java.nio.file.Path
 
 public fun main(args: Array<String>) {
     KotlinLoggingConfiguration.logStartupMessage = false
 
-    runBlocking {
-        if (args.firstOrNull() == "server") {
+    if (args.firstOrNull() == "server") {
+        runBlocking {
             runGitMcpServer()
-            return@runBlocking
         }
+        return
+    }
 
-        val repository = args.firstOrNull()
-            ?: Path.of("../..").toAbsolutePath().normalize().toString()
-        val result = GitAgent().inspectRepository(repository)
+    val demo = "--demo" in args
+    val command = args.firstOrNull { !it.startsWith("--") } ?: "cli"
+    val config = AppConfig.fromEnvironment(demo)
+    val model: LanguageModel = if (demo) DemoLanguageModel() else OpenAiCompatibleModel(config)
+    val agent = ChatAgent(
+        model = model,
+        tools = GitMcpGateway(),
+        store = FileChatStore(config.dataDirectory),
+        systemPrompt = config.systemPrompt,
+        repositoryPath = config.repositoryPath,
+        modelName = config.model,
+    )
 
-        println("Agent called MCP tool '$GIT_SUMMARY_TOOL'")
-        println("Agent received and used the result:")
-        println(result)
+    when (command) {
+        "cli" -> ChatCli(agent).run()
+        "web" -> runWeb(agent, config)
+        else -> error("Unknown mode '$command'. Use cli or web.")
     }
 }
