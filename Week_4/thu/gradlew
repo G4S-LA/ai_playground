@@ -1,0 +1,6 @@
+#!/bin/sh
+
+# The repository already contains the Gradle wrapper in the Wednesday project.
+# Reuse it while keeping Thursday runnable with the familiar ./gradlew command.
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "$SCRIPT_DIR/../wed/gradlew" -p "$SCRIPT_DIR" "$@"
