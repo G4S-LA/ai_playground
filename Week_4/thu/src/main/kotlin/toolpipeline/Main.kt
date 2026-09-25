@@ -23,6 +23,12 @@ private suspend fun runApplication(args: Array<String>) {
         return
     }
 
+    val model: LanguageModel = if (demo) DemoPipelineLanguageModel() else OpenAiCompatibleModel(config)
+    val agent = PipelineAgent(model, PipelineMcpGateway(config))
+    if (command == "web") {
+        runWeb(agent, config)
+        return
+    }
     val request = when (command) {
         "demo" -> "Найди материалы про MCP tool schemas, сделай сводку и сохрани её в pipeline-report.md"
         "run" -> args.drop(1).filterNot { it == "--demo" }.joinToString(" ").ifBlank {
@@ -30,8 +36,7 @@ private suspend fun runApplication(args: Array<String>) {
         }
         else -> error("Unknown command '$command'. Start with 'help'.")
     }
-    val model: LanguageModel = if (demo) DemoPipelineLanguageModel() else OpenAiCompatibleModel(config)
-    val result = PipelineAgent(model, PipelineMcpGateway(config)).run(request)
+    val result = agent.run(request)
     result.executions.forEachIndexed { index, execution ->
         println("${index + 1}. ${execution.name}")
     }
@@ -43,6 +48,7 @@ private fun printUsage() {
         """
         Usage:
           ./gradlew run --args=demo
+          ./gradlew run --args="web --demo"
           ./gradlew run --args="run Найди данные про MCP, сделай сводку и сохрани её в report.md"
           ./gradlew run --args=server
           ./gradlew test

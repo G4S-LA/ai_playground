@@ -12,6 +12,8 @@ internal data class AppConfig(
     val temperature: Double,
     val timeoutSeconds: Long,
     val outputDirectory: Path,
+    val webHost: String,
+    val webPort: Int,
 ) {
     companion object {
         fun fromEnvironment(
@@ -30,6 +32,8 @@ internal data class AppConfig(
             require(temperature in 0.0..2.0) { "LLM_TEMPERATURE must be between 0 and 2." }
             val timeout = setting("LLM_TIMEOUT_SECONDS")?.toLongOrNull() ?: 120L
             require(timeout > 0) { "LLM_TIMEOUT_SECONDS must be positive." }
+            val webPort = setting("WEB_PORT")?.toIntOrNull() ?: 8080
+            require(webPort in 1..65_535) { "WEB_PORT must be between 1 and 65535." }
 
             return AppConfig(
                 apiKey = apiKey,
@@ -38,6 +42,8 @@ internal data class AppConfig(
                 temperature = temperature,
                 timeoutSeconds = timeout,
                 outputDirectory = Path(setting("PIPELINE_OUTPUT_DIR") ?: "data").toAbsolutePath().normalize(),
+                webHost = setting("WEB_HOST") ?: "127.0.0.1",
+                webPort = webPort,
             )
         }
 

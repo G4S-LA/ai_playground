@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MCP Tool Pipeline</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="header">
+        <div>
+          <p class="eyebrow">MCP · Agent loop</p>
+          <h1>Tool Pipeline</h1>
+          <p class="subtitle">Модель сама строит цепочку, а справа виден каждый её шаг.</p>
+        </div>
+        <div id="connection" class="connection">MCP tools: загрузка…</div>
+      </header>
+
+      <section class="workspace">
+        <section class="agent-card" aria-labelledby="agent-title">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">Задача</p>
+              <h2 id="agent-title">Запустить агента</h2>
+            </div>
+          </div>
+
+          <form id="pipeline-form" class="composer">
+            <label for="request">Что нужно найти, обработать и сохранить?</label>
+            <textarea id="request" maxlength="4000" rows="6" required>Найди материалы про MCP tool schemas, сделай сводку и сохрани её в pipeline-report.md</textarea>
+            <button id="run" type="submit">Запустить цепочку</button>
+          </form>
+
+          <section class="answer-block" aria-live="polite">
+            <p class="eyebrow">Ответ агента</p>
+            <div id="answer" class="answer empty">Здесь появится итоговый ответ после выполнения цепочки.</div>
+          </section>
+        </section>
+
+        <aside class="trace-card" aria-labelledby="trace-title">
+          <div class="trace-heading">
+            <div>
+              <p class="eyebrow">Live trace</p>
+              <h2 id="trace-title">Что делает модель</h2>
+            </div>
+            <span id="status" class="status status--idle">ожидание</span>
+          </div>
+
+          <div id="current-action" class="current-action">Запустите задачу, чтобы увидеть tool calls.</div>
+
+          <div class="pipeline" aria-label="Этапы MCP-пайплайна">
+            <article id="stage-search" class="stage" data-tool="search">
+              <span>01</span><div><strong>search</strong><small>получение данных</small></div>
+            </article>
+            <div class="connector">↓</div>
+            <article id="stage-summarize" class="stage" data-tool="summarize">
+              <span>02</span><div><strong>summarize</strong><small>обработка результата</small></div>
+            </article>
+            <div class="connector">↓</div>
+            <article id="stage-saveToFile" class="stage" data-tool="saveToFile">
+              <span>03</span><div><strong>saveToFile</strong><small>сохранение файла</small></div>
+            </article>
+          </div>
+
+          <div class="events-heading">
+            <h3>События агента</h3>
+            <span id="event-count">0</span>
+          </div>
+          <div id="events" class="events" aria-live="polite">
+            <p class="events-empty">Трасса пока пуста.</p>
+          </div>
+        </aside>
+      </section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

@@ -20,15 +20,22 @@ class PipelineAgentTest {
                 demo = true,
                 environment = mapOf("PIPELINE_OUTPUT_DIR" to output.toString()),
             )
+            val trace = mutableListOf<PipelineTraceEvent>()
             val run = PipelineAgent(
                 model = DemoPipelineLanguageModel(
                     query = "MCP tool schemas and pipeline tests",
                     fileName = "result.md",
                 ),
                 gateway = PipelineMcpGateway(config),
-            ).run("Run the complete pipeline")
+            ).run("Run the complete pipeline", trace::add)
 
             assertEquals(listOf(SEARCH_TOOL, SUMMARIZE_TOOL, SAVE_TOOL), run.executions.map { it.name })
+            assertEquals(
+                listOf(SEARCH_TOOL, SUMMARIZE_TOOL, SAVE_TOOL),
+                trace.filter { it.type == "tool_started" }.mapNotNull { it.toolName },
+            )
+            assertEquals(4, trace.count { it.type == "model_started" })
+            assertEquals("pipeline_completed", trace.last().type)
 
             val gson = Gson()
             val searchJson = gson.fromJson(run.executions[0].result, JsonObject::class.java)

@@ -9,7 +9,10 @@ internal class PipelineAgent(
     private val gateway: ToolGateway,
     private val gson: Gson = Gson(),
 ) {
-    suspend fun run(request: String): PipelineRun {
+    suspend fun run(
+        request: String,
+        trace: (PipelineTraceEvent) -> Unit = {},
+    ): PipelineRun {
         require(request.isNotBlank()) { "request must not be blank" }
         return gateway.withSession {
             val tools = listTools()
@@ -30,10 +33,36 @@ internal class PipelineAgent(
                 AgentMessage(role = "user", content = request),
             )
             val executions = mutableListOf<ToolExecution>()
+            trace(
+                PipelineTraceEvent(
+                    type = "pipeline_started",
+                    message = "Агент получил ${tools.size} MCP tools и начал пайплайн",
+                    payload = request,
+                ),
+            )
 
             repeat(MAX_AGENT_TURNS) {
+                val previousTool = executions.lastOrNull()?.name
+                trace(
+                    PipelineTraceEvent(
+                        type = "model_started",
+                        message = if (previousTool == null) {
+                            "Модель анализирует запрос и выбирает первый tool"
+                        } else {
+                            "Модель анализирует результат $previousTool и выбирает следующий шаг"
+                        },
+                        payload = "Доступны schemas: ${tools.joinToString { tool -> tool.name }}",
+                    ),
+                )
                 val turn = model.complete(messages, tools)
                 if (turn.toolCalls.isEmpty()) {
+                    trace(
+                        PipelineTraceEvent(
+                            type = "model_completed",
+                            message = "Модель завершила цепочку и сформировала ответ",
+                            payload = turn.content,
+                        ),
+                    )
                     require(turn.content.isNotBlank()) { "Model returned an empty final answer." }
                     val actualOrder = executions.map(ToolExecution::name)
                     if (actualOrder != pipelineOrder) {
@@ -42,20 +71,52 @@ internal class PipelineAgent(
                                 "Expected ${pipelineOrder.joinToString(" -> ")}.",
                         )
                     }
+                    trace(
+                        PipelineTraceEvent(
+                            type = "pipeline_completed",
+                            message = "Цепочка search → summarize → saveToFile завершена",
+                        ),
+                    )
                     return@withSession PipelineRun(turn.content.trim(), executions)
                 }
                 val call = turn.toolCalls.singleOrNull()
                     ?: throw PipelineException("A sequential pipeline must call exactly one tool per turn.")
                 require(call.name in availableNames) { "Model requested unknown tool '${call.name}'." }
                 val arguments = parseArguments(call.argumentsJson)
+                trace(
+                    PipelineTraceEvent(
+                        type = "model_tool_selected",
+                        message = "Модель выбрала ${call.name}",
+                        toolName = call.name,
+                        payload = call.argumentsJson,
+                    ),
+                )
                 messages += AgentMessage(role = "assistant", content = turn.content, toolCalls = listOf(call))
+                trace(
+                    PipelineTraceEvent(
+                        type = "tool_started",
+                        message = "MCP выполняет ${call.name}",
+                        toolName = call.name,
+                        payload = gson.toJson(arguments),
+                    ),
+                )
                 val toolResult = callTool(call.name, arguments)
+                trace(
+                    PipelineTraceEvent(
+                        type = "tool_completed",
+                        message = "Результат ${call.name} возвращён модели",
+                        toolName = call.name,
+                        payload = toolResult,
+                    ),
+                )
                 executions += ToolExecution(call.name, arguments, toolResult)
                 messages += AgentMessage(role = "tool", content = toolResult, toolCallId = call.id)
             }
             throw PipelineException("Agent exceeded the limit of $MAX_AGENT_TURNS turns.")
         }
     }
+
+    suspend fun availableTools(): List<AgentTool> = gateway.withSession { listTools() }
 
     private fun parseArguments(json: String): Map<String, Any?> {
         val root = try {

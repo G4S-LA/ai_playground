@@ -1,5 +1,7 @@
 package toolpipeline
 
+import java.time.Instant
+
 internal data class SearchItem(
     val id: String,
     val title: String,
@@ -58,6 +60,14 @@ internal data class ToolExecution(
 internal data class PipelineRun(
     val answer: String,
     val executions: List<ToolExecution>,
+)
+
+internal data class PipelineTraceEvent(
+    val type: String,
+    val message: String,
+    val toolName: String? = null,
+    val payload: String? = null,
+    val createdAt: String = Instant.now().toString(),
 )
 
 internal class PipelineException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
