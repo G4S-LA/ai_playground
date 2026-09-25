@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Новостной агент с MCP</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <main class="workspace">
+      <aside class="sidebar chats-sidebar">
+        <div class="brand">
+          <p class="eyebrow">MCP · расписание</p>
+          <h1>Мои диалоги</h1>
+        </div>
+        <button id="new-session" class="new-chat-button" type="button">+ Новый диалог</button>
+        <nav id="session-list" class="session-list" aria-label="Диалоги"></nav>
+      </aside>
+
+      <section class="chat">
+        <header class="chat__header">
+          <div>
+            <h2 id="session-title">Загрузка…</h2>
+            <p id="model-name" class="model"></p>
+          </div>
+          <button id="delete-session" class="secondary-button" type="button">Удалить диалог</button>
+        </header>
+
+        <section id="messages" class="messages" aria-live="polite"></section>
+
+        <form id="chat-form" class="composer">
+          <label class="visually-hidden" for="message-input">Сообщение</label>
+          <textarea id="message-input" rows="3" maxlength="4000"
+            placeholder="Например: через 30 секунд пришли топ новостей за сутки" required></textarea>
+          <button id="send-button" class="primary-button" type="submit">Отправить</button>
+        </form>
+        <p class="hint">Агент сам вызывает MCP и сохраняет расписание · Enter — отправить</p>
+      </section>
+
+      <aside class="sidebar reports-panel" aria-labelledby="reports-title">
+        <div class="brand reports-heading">
+          <p class="eyebrow">JSON · cron · MCP</p>
+          <h2 id="reports-title">Расписания</h2>
+        </div>
+
+        <div class="toolbar">
+          <button id="refresh-dashboard" class="panel-button" type="button">Обновить</button>
+          <button id="run-due" class="panel-button panel-button--accent" type="button">Проверить сейчас</button>
+          <button id="clear-dashboard" class="panel-button panel-button--danger" type="button">Очистить задания и историю</button>
+        </div>
+        <p id="runner-status" class="panel-status" role="status">Web-сервер ожидает задания.</p>
+
+        <section class="panel-section">
+          <div class="section-heading">
+            <h3>Сохранённые задания</h3>
+            <span id="schedule-count" class="count">0</span>
+          </div>
+          <div id="schedule-list" class="card-list"></div>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-heading">
+            <h3>История отчётов</h3>
+            <span id="run-count" class="count">0</span>
+          </div>
+          <div id="history-summary" class="history-summary"></div>
+          <div id="report-list" class="card-list"></div>
+        </section>
+      </aside>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
