@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Multi-MCP Agent</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="header">
+        <div>
+          <p class="eyebrow">MCP · routing · agent loop</p>
+          <h1>Multi-MCP Agent</h1>
+          <p class="subtitle">Модель сама выбирает нужные инструменты News, Currency и Excel MCP.</p>
+        </div>
+        <div id="connection" class="connection">MCP registry: подключение…</div>
+      </header>
+
+      <section class="workspace">
+        <section class="agent-card" aria-labelledby="agent-title">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">Задача</p>
+              <h2 id="agent-title">Задача для агента</h2>
+            </div>
+          </div>
+
+          <form id="agent-form" class="composer">
+            <label for="request">Что нужно сделать?</label>
+            <textarea id="request" maxlength="4000" rows="6" required>Получи свежие Hacker News и курсы USD к EUR, GBP и JPY. Сохрани их в Excel, оформи таблицу и проверь книгу.</textarea>
+            <button id="run" type="submit">Запустить агента</button>
+          </form>
+
+          <section class="answer-block" aria-live="polite">
+            <p class="eyebrow">Ответ агента</p>
+            <div id="answer" class="answer empty">Здесь появится ответ и трасса выбранных моделью MCP-вызовов.</div>
+          </section>
+        </section>
+
+        <aside class="trace-card" aria-labelledby="trace-title">
+          <div class="trace-heading">
+            <div>
+              <p class="eyebrow">Live trace</p>
+              <h2 id="trace-title">MCP-маршрутизация</h2>
+            </div>
+            <span id="status" class="status status--idle">ожидание</span>
+          </div>
+
+          <div id="current-action" class="current-action">Запустите задачу, чтобы увидеть выбор и маршрутизацию tools.</div>
+
+          <div class="servers-heading">
+            <h3>Задействованные MCP-серверы</h3>
+            <span>model → router → server</span>
+          </div>
+          <div id="mcp-servers" class="mcp-servers" aria-label="Зарегистрированные MCP-серверы">
+            <p class="events-empty">Загружаем MCP registry…</p>
+          </div>
+
+          <div class="events-heading">
+            <h3>События агента</h3>
+            <span id="event-count">0</span>
+          </div>
+          <div id="events" class="events" aria-live="polite">
+            <p class="events-empty">Трасса пока пуста.</p>
+          </div>
+        </aside>
+      </section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
