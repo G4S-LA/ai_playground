@@ -26,6 +26,12 @@ hashing-эмбеддинги и позволяет проверить весь �
 Это технический режим для демонстрации; для смыслового поиска используйте
 Ollama.
 
+На Windows запускайте те же команды из PowerShell через `gradlew.bat`:
+
+```powershell
+.\gradlew.bat run --args="web --demo"
+```
+
 ## Запуск с локальной embedding-моделью
 
 Установите и запустите Ollama, затем загрузите модель:
@@ -33,6 +39,12 @@ Ollama.
 ```bash
 ollama pull nomic-embed-text
 ./gradlew run --args=web
+```
+
+На Windows последняя команда выглядит так:
+
+```powershell
+.\gradlew.bat run --args="web"
 ```
 
 По умолчанию приложение обращается к `http://127.0.0.1:11434/api/embed` и
