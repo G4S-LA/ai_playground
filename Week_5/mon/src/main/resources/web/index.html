@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Local Document Index</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<main class="shell">
+    <header class="hero">
+        <div>
+            <p class="eyebrow">Kotlin · SQLite · local embeddings</p>
+            <h1>Document Index</h1>
+            <p class="subtitle">Загрузите корпус, постройте два индекса и посмотрите, как границы чанков меняют выдачу.</p>
+        </div>
+        <div class="provider">
+            <span class="pulse"></span>
+            <span id="provider">подключение…</span>
+        </div>
+    </header>
+
+    <section class="workspace">
+        <aside class="setup">
+            <article class="panel numbered">
+                <span class="step">01</span>
+                <h2>Документы</h2>
+                <label class="drop" id="drop-zone">
+                    <input id="files" type="file" multiple accept=".md,.markdown,.txt,.kt,.kts,.java,.pdf">
+                    <span class="drop-icon">↥</span>
+                    <strong>Выберите или перетащите файлы</strong>
+                    <small>MD, TXT, Kotlin, Java, PDF · до 15 МБ</small>
+                </label>
+                <div id="file-list" class="file-list muted">Файлы ещё не выбраны</div>
+                <button class="button secondary" id="upload">Загрузить документы</button>
+            </article>
+
+            <article class="panel numbered">
+                <span class="step">02</span>
+                <h2>Индексация</h2>
+                <div class="fields">
+                    <label>Fixed chunk, символов<input id="fixed-size" type="number" min="200" max="20000" value="1500"></label>
+                    <label>Overlap<input id="overlap" type="number" min="0" max="1499" value="250"></label>
+                    <label>Structured max<input id="structured-size" type="number" min="300" max="20000" value="2000"></label>
+                </div>
+                <button class="button primary" id="build">Построить оба индекса</button>
+                <p class="hint">Fixed режет поток по длине. Structured сохраняет заголовки, разделы, страницы и декларации кода.</p>
+            </article>
+        </aside>
+
+        <section class="main-column">
+            <article class="panel stats-panel">
+                <div class="section-title">
+                    <div><p class="eyebrow">Состояние</p><h2>Два взгляда на корпус</h2></div>
+                    <button class="icon-button" id="refresh" title="Обновить">↻</button>
+                </div>
+                <div class="stats" id="stats">
+                    <div class="stat skeleton"></div><div class="stat skeleton"></div>
+                </div>
+            </article>
+
+            <article class="panel search-panel">
+                <div class="section-title">
+                    <div><p class="eyebrow">Retrieval playground</p><h2>Поиск и сравнение</h2></div>
+                    <label class="top-k">Top K <input id="top-k" type="number" min="1" max="20" value="5"></label>
+                </div>
+                <div class="query-row">
+                    <input id="query" type="search" placeholder="Например: как настроить локальный запуск?">
+                    <button class="button primary" id="compare">Сравнить</button>
+                </div>
+                <div class="quick-actions">
+                    <button class="text-button" data-strategy="fixed">Только fixed</button>
+                    <button class="text-button" data-strategy="structured">Только structured</button>
+                </div>
+                <div id="results" class="empty-state">
+                    <span>⌕</span>
+                    <p>Введите вопрос к документам. Одинаковый embedding запроса будет проверен на обоих индексах.</p>
+                </div>
+            </article>
+        </section>
+    </section>
+</main>
+
+<div id="toast" class="toast" aria-live="polite"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
