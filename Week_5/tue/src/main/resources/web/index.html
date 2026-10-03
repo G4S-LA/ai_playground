@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RAG Lab · Answers under evidence</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<main class="shell">
+    <header class="hero">
+        <div>
+            <p class="eyebrow">Tuesday · retrieval augmented generation</p>
+            <h1>Answers<br><em>under evidence.</em></h1>
+            <p class="lead">Один вопрос. Одна модель. Два режима — память модели против ответа, заземлённого в вашей базе знаний.</p>
+        </div>
+        <div class="model-card">
+            <span>Runtime</span>
+            <strong id="chat-model">подключение…</strong>
+            <small id="embedding-model"></small>
+        </div>
+    </header>
+
+    <section class="status-strip">
+        <div><span>Structured index</span><strong id="chunk-count">—</strong><small>чанков</small></div>
+        <div><span>Documents</span><strong id="document-count">—</strong><small>источников</small></div>
+        <div><span>Control set</span><strong id="question-count">10</strong><small>вопросов</small></div>
+        <button id="rebuild" class="quiet-button">Перестроить индекс ↗</button>
+    </section>
+
+    <section class="ask-panel panel">
+        <div class="panel-heading">
+            <div><p class="eyebrow">A/B comparison</p><h2>Спросить у агента</h2></div>
+            <label>Top K <input id="top-k" type="number" min="1" max="12" value="5"></label>
+        </div>
+        <div class="ask-row">
+            <textarea id="question" rows="3" placeholder="Например: чем агентный RAG отличается от обычного?"></textarea>
+            <button id="compare" class="primary-button">Сравнить<br>два ответа</button>
+        </div>
+        <div id="comparison" class="comparison empty">
+            <div class="empty-copy">Выберите контрольный вопрос ниже или задайте свой.</div>
+        </div>
+    </section>
+
+    <section class="evaluation panel">
+        <div class="panel-heading">
+            <div><p class="eyebrow">Evaluation dataset</p><h2>10 контрольных вопросов</h2></div>
+            <button id="run-evaluation" class="primary-button accent">Запустить все 10</button>
+        </div>
+        <p class="note">Автооценка проверяет обязательные понятия, ожидаемые файлы в retrieval и цитаты. Полные ответы остаются видны для ручной проверки.</p>
+        <div id="evaluation-progress" class="progress hidden">
+            <div><span id="progress-label">Подготовка…</span><strong id="progress-value">0 / 10</strong></div>
+            <div class="track"><i id="progress-bar"></i></div>
+        </div>
+        <div id="summary" class="summary hidden"></div>
+        <div id="questions" class="questions"></div>
+    </section>
+</main>
+
+<div id="toast" class="toast" aria-live="polite"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
