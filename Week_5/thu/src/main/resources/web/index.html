@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Grounded RAG · ответы с доказательствами</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<main class="shell">
+    <header class="hero">
+        <div>
+            <p class="eyebrow">Grounded generation · 03</p>
+            <h1>Grounded RAG.<br><span>Только с доказательствами.</span></h1>
+            <p class="lead">Каждое утверждение связано с источником и дословной цитатой. Если надёжного контекста нет — ассистент честно отвечает «не знаю».</p>
+        </div>
+        <aside class="contract">
+            <small>Answer contract</small>
+            <div><i>✓</i><span>Ответ со ссылками [S1]</span></div>
+            <div><i>✓</i><span>source + section + chunk_id</span></div>
+            <div><i>✓</i><span>Дословные цитаты</span></div>
+            <div><i>✓</i><span>Проверка groundedness</span></div>
+        </aside>
+    </header>
+
+    <section class="status-bar">
+        <div><span>LLM</span><strong id="chat-model">подключение…</strong></div>
+        <div><span>Embeddings</span><strong id="embedding-model">—</strong></div>
+        <div><span>Index</span><strong id="chunk-count">—</strong><small>чанков</small></div>
+        <button id="rebuild" class="text-button">Перестроить ↗</button>
+    </section>
+
+    <section class="ask panel">
+        <div class="section-heading">
+            <div><p class="eyebrow">Evidence first</p><h2>Задать вопрос базе знаний</h2></div>
+            <div class="settings">
+                <label>Кандидаты <input id="candidate-k" type="number" min="1" max="30" value="12"></label>
+                <label>В контекст <input id="final-k" type="number" min="1" max="12" value="5"></label>
+                <label>Порог <input id="threshold" type="number" min="-1" max="1" step="0.01" value="0.35"></label>
+            </div>
+        </div>
+        <div class="ask-row">
+            <textarea id="question" rows="3" placeholder="Например: как статическая информация влияет на KV Cache?"></textarea>
+            <button id="answer" class="primary-button">Найти<br>доказательства</button>
+        </div>
+        <div id="result" class="result empty"><div>Здесь появится проверенный ответ или честное «не знаю».</div></div>
+    </section>
+
+    <section class="evaluation panel">
+        <div class="section-heading">
+            <div><p class="eyebrow">Groundedness evaluation</p><h2>10 контрольных вопросов</h2></div>
+            <button id="run-evaluation" class="primary-button compact">Проверить все</button>
+        </div>
+        <p class="note">Для каждого ответа проверяются источники, цитаты, дословное совпадение с чанками, корректность ссылок и смысловая поддержка цитатами.</p>
+        <div id="evaluation-progress" class="progress hidden">
+            <div><span id="progress-label">Подготовка…</span><b id="progress-value">0 / 10</b></div>
+            <div class="track"><i id="progress-bar"></i></div>
+        </div>
+        <div id="summary" class="summary hidden"></div>
+        <div id="questions" class="questions"></div>
+    </section>
+</main>
+<div id="toast" class="toast" aria-live="polite"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
