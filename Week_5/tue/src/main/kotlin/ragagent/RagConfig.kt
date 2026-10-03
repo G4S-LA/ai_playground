@@ -27,7 +27,7 @@ data class RagConfig(
         ): RagConfig {
             val dotenv = readDotEnv(dotenvPath)
             fun setting(name: String): String? = environment[name].normalized() ?: dotenv[name].normalized()
-            val port = setting("WEB_PORT")?.toIntOrNull() ?: 8081
+            val port = setting("WEB_PORT")?.toIntOrNull() ?: 8080
             require(port in 1..65535) { "WEB_PORT должен быть от 1 до 65535." }
 
             return RagConfig(

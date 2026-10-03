@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Enhanced RAG · Retrieval laboratory</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<main class="shell">
+    <header class="hero">
+        <div>
+            <p class="eyebrow">Retrieval laboratory · 02</p>
+            <h1>Search less.<br><span>Know more.</span></h1>
+            <p class="lead">Смотрим, как query rewrite, порог релевантности и heuristic reranking меняют контекст и итоговый ответ.</p>
+        </div>
+        <div class="runtime">
+            <span class="live-dot"></span>
+            <div><small>Generation</small><strong id="chat-model">подключение…</strong></div>
+            <div><small>Retrieval</small><strong id="embedding-model">—</strong></div>
+        </div>
+    </header>
+
+    <section class="pipeline" aria-label="Enhanced RAG pipeline">
+        <div><b>01</b><span>Question</span></div><i>→</i>
+        <div class="enhanced"><b>02</b><span>Rewrite</span></div><i>→</i>
+        <div><b>03</b><span>Top candidates</span></div><i>→</i>
+        <div class="enhanced"><b>04</b><span>Threshold</span></div><i>→</i>
+        <div class="enhanced"><b>05</b><span>Rerank</span></div><i>→</i>
+        <div><b>06</b><span>Answer</span></div>
+    </section>
+
+    <section class="status-bar">
+        <div><span>Structured index</span><strong id="chunk-count">—</strong><small>chunks</small></div>
+        <div><span>Documents</span><strong id="document-count">—</strong><small>sources</small></div>
+        <div><span>Control set</span><strong id="question-count">10</strong><small>questions</small></div>
+        <button id="rebuild" class="text-button">Перестроить индекс ↗</button>
+    </section>
+
+    <section class="lab panel">
+        <div class="section-heading">
+            <div><p class="eyebrow">Live comparison</p><h2>Один вопрос, два retrieval-пути</h2></div>
+            <div class="settings">
+                <label>До фильтра <input id="candidate-k" type="number" min="1" max="30" value="12"></label>
+                <label>После <input id="final-k" type="number" min="1" max="12" value="5"></label>
+                <label>Threshold <input id="threshold" type="number" min="-1" max="1" step="0.01" value="0.35"></label>
+            </div>
+        </div>
+        <div class="ask-row">
+            <textarea id="question" rows="3" placeholder="Например: зачем документы разбивают на чанки?"></textarea>
+            <button id="compare" class="primary-button">Запустить<br>сравнение</button>
+        </div>
+        <div id="comparison" class="comparison empty">
+            <div class="empty-state">Выберите контрольный вопрос или задайте свой.</div>
+        </div>
+    </section>
+
+    <section class="evaluation panel">
+        <div class="section-heading">
+            <div><p class="eyebrow">Evaluation</p><h2>Контрольный прогон</h2></div>
+            <button id="run-evaluation" class="primary-button compact">Проверить все 10</button>
+        </div>
+        <p class="note">Сравниваются покрытие ожидаемых понятий, recall источников, цитирование и доля кандидатов, прошедших фильтр.</p>
+        <div id="evaluation-progress" class="progress hidden">
+            <div><span id="progress-label">Подготовка…</span><b id="progress-value">0 / 10</b></div>
+            <div class="track"><i id="progress-bar"></i></div>
+        </div>
+        <div id="summary" class="summary hidden"></div>
+        <div id="questions" class="questions"></div>
+    </section>
+</main>
+<div id="toast" class="toast" aria-live="polite"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

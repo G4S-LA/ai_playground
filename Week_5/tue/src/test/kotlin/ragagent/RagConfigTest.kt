@@ -56,7 +56,7 @@ class RagConfigTest {
         assertEquals(null, config.apiKey)
         assertEquals("api", config.llmProvider)
         assertEquals("deepseek-chat", config.apiModel)
-        assertEquals(8081, config.port)
+        assertEquals(8080, config.port)
     }
 
     @Test
