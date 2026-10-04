@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RAG-чат с памятью</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<main class="shell">
+    <header class="hero">
+        <div>
+            <p class="eyebrow">Conversation · retrieval · evidence</p>
+            <h1>RAG-чат <span>с памятью</span></h1>
+            <p class="lead">История остаётся в сессии, память удерживает задачу, а каждый ответ привязан к найденным чанкам.</p>
+        </div>
+        <div class="hero-actions">
+            <button id="new-chat" class="accent-button">Новый чат</button>
+            <button id="rebuild" class="plain-button">Перестроить индекс</button>
+        </div>
+    </header>
+
+    <section class="status-bar">
+        <div><span>Chat model</span><strong id="chat-model">—</strong></div>
+        <div><span>Embeddings</span><strong id="embedding-model">—</strong></div>
+        <div><span>Structured index</span><strong id="chunk-count">—</strong><small>chunks</small></div>
+        <div><span>Session turns</span><strong id="turn-count">0</strong><small>messages</small></div>
+    </section>
+
+    <section class="workspace">
+        <aside class="memory-panel">
+            <div class="panel-title">
+                <div><p class="eyebrow">Task state</p><h2>Память задачи</h2></div>
+                <span id="memory-revision" class="revision">v0</span>
+            </div>
+            <p class="memory-note">Обновляется после каждой реплики и передаётся в следующий поиск.</p>
+            <section class="memory-block goal-block">
+                <h3>Goal</h3>
+                <p id="memory-goal">Цель появится после первого сообщения.</p>
+            </section>
+            <section class="memory-block">
+                <h3>Clarified</h3>
+                <div id="memory-facts" class="memory-list empty">Пока ничего</div>
+            </section>
+            <section class="memory-block">
+                <h3>Constraints</h3>
+                <div id="memory-constraints" class="memory-list empty">Пока ничего</div>
+            </section>
+            <section class="memory-block">
+                <h3>Terms</h3>
+                <div id="memory-terms" class="memory-list empty">Пока ничего</div>
+            </section>
+            <div class="memory-method">Update: <b id="memory-method">initial</b></div>
+        </aside>
+
+        <div class="chat-panel">
+            <div id="messages" class="messages">
+                <div class="welcome">
+                    <b>Начните диалог</b>
+                    <p>Сначала сформулируйте цель. Затем можно уточнять условия короткими репликами: «только локально», «под памятью имею в виду…», «а теперь сравни второй вариант».</p>
+                </div>
+            </div>
+
+            <form id="composer" class="composer">
+                <div class="retrieval-settings">
+                    <label>Кандидаты <input id="candidate-k" type="number" min="1" max="30" value="12"></label>
+                    <label>В контекст <input id="final-k" type="number" min="1" max="12" value="5"></label>
+                    <label>Порог <input id="threshold" type="number" min="-1" max="1" step="0.01" value="0.35"></label>
+                </div>
+                <div class="compose-row">
+                    <textarea id="message" rows="3" maxlength="1000" placeholder="Напишите сообщение…"></textarea>
+                    <button id="send" class="send-button" type="submit">Отправить</button>
+                </div>
+                <p class="hint">Enter — отправить, Shift + Enter — новая строка. История хранится до перезапуска сервера.</p>
+            </form>
+        </div>
+    </section>
+</main>
+<div id="toast" class="toast" aria-live="polite"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

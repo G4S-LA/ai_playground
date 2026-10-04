@@ -24,10 +24,11 @@ data class RagConfig(
             demo: Boolean = false,
             environment: Map<String, String> = System.getenv(),
             dotenvPath: Path = Path(".env"),
+            defaultPort: Int = 8080,
         ): RagConfig {
             val dotenv = readDotEnv(dotenvPath)
             fun setting(name: String): String? = environment[name].normalized() ?: dotenv[name].normalized()
-            val port = setting("WEB_PORT")?.toIntOrNull() ?: 8080
+            val port = setting("WEB_PORT")?.toIntOrNull() ?: defaultPort
             require(port in 1..65535) { "WEB_PORT должен быть от 1 до 65535." }
 
             return RagConfig(
