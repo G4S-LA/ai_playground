@@ -47,6 +47,26 @@ class RagConfigTest {
     }
 
     @Test
+    fun `loads missing model settings from fallback dotenv without inheriting its port`() {
+        val primary = tempDir.resolve("local.env")
+        val fallback = tempDir.resolve("previous.env")
+        primary.writeText("LLM_MODEL=local-model")
+        fallback.writeText("LLM_API_KEY=previous-key\nLLM_MODEL=previous-model\nWEB_PORT=8080")
+
+        val config = RagConfig.fromEnvironment(
+            environment = emptyMap(),
+            dotenvPath = primary,
+            defaultPort = 5000,
+            fallbackDotenvPaths = listOf(fallback),
+            fallbackDotenvKeys = setOf("LLM_API_KEY", "LLM_MODEL"),
+        )
+
+        assertEquals("previous-key", config.apiKey)
+        assertEquals("local-model", config.apiModel)
+        assertEquals(5000, config.port)
+    }
+
+    @Test
     fun `missing dotenv uses defaults`() {
         val config = RagConfig.fromEnvironment(
             environment = emptyMap(),

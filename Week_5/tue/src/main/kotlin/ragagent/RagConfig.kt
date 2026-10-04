@@ -25,8 +25,10 @@ data class RagConfig(
             environment: Map<String, String> = System.getenv(),
             dotenvPath: Path = Path(".env"),
             defaultPort: Int = 8080,
+            fallbackDotenvPaths: List<Path> = emptyList(),
+            fallbackDotenvKeys: Set<String>? = null,
         ): RagConfig {
-            val dotenv = readDotEnv(dotenvPath)
+            val dotenv = readDotEnvWithFallbacks(dotenvPath, fallbackDotenvPaths, fallbackDotenvKeys)
             fun setting(name: String): String? = environment[name].normalized() ?: dotenv[name].normalized()
             val port = setting("WEB_PORT")?.toIntOrNull() ?: defaultPort
             require(port in 1..65535) { "WEB_PORT должен быть от 1 до 65535." }
@@ -45,6 +47,24 @@ data class RagConfig(
                 ollamaChatModel = setting("OLLAMA_CHAT_MODEL") ?: "qwen3.5:4b",
                 demo = demo,
             )
+        }
+
+        private fun readDotEnvWithFallbacks(
+            primaryPath: Path,
+            fallbackPaths: List<Path>,
+            fallbackKeys: Set<String>?,
+        ): Map<String, String> = buildMap {
+            putAll(readDotEnv(primaryPath))
+            fallbackPaths.asSequence()
+                .map(Path::toAbsolutePath)
+                .map(Path::normalize)
+                .distinct()
+                .filterNot { it == primaryPath.toAbsolutePath().normalize() }
+                .forEach { path ->
+                    readDotEnv(path).forEach { (key, value) ->
+                        if (key !in this && (fallbackKeys == null || key in fallbackKeys)) put(key, value)
+                    }
+                }
         }
 
         private fun readDotEnv(path: Path): Map<String, String> {

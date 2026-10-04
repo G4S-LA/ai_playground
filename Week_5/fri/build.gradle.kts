@@ -45,3 +45,4 @@ java {
 
 application { mainClass.set("memorychat.MainKt") }
 tasks.test { useJUnitPlatform() }
+tasks.named<JavaExec>("run") { workingDir = project.projectDir }

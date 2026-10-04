@@ -14,6 +14,7 @@ import ragagent.DemoChatLanguageModel
 import ragagent.OllamaChatLanguageModel
 import ragagent.OpenAiCompatibleChatLanguageModel
 import ragagent.RagConfig
+import kotlin.io.path.Path
 
 fun main(args: Array<String>) = runBlocking {
     val demo = "--demo" in args
@@ -24,7 +25,12 @@ fun main(args: Array<String>) = runBlocking {
         return@runBlocking
     }
 
-    val config = RagConfig.fromEnvironment(demo, defaultPort = 5000)
+    val config = RagConfig.fromEnvironment(
+        demo = demo,
+        defaultPort = 5000,
+        fallbackDotenvPaths = sharedDotenvPaths(),
+        fallbackDotenvKeys = SHARED_ENV_KEYS,
+    )
     val embeddings: EmbeddingProvider = if (demo) DemoEmbeddingProvider() else {
         OllamaEmbeddingProvider(config.ollamaUrl, config.embeddingModel)
     }
@@ -46,6 +52,15 @@ fun main(args: Array<String>) = runBlocking {
     }
 }
 
+private fun sharedDotenvPaths() = listOf(
+    Path("../.env"),
+    Path("../../.env"),
+    Path("../thu/.env"),
+    Path("../wed/.env"),
+    Path("../tue/.env"),
+    Path("../mon/.env"),
+)
+
 private fun chatModel(config: RagConfig): ChatLanguageModel = when {
     config.demo -> DemoChatLanguageModel()
     config.llmProvider == "api" -> OpenAiCompatibleChatLanguageModel(
@@ -66,4 +81,15 @@ private fun printUsage() = println(
       ./gradlew run --args=index
       ./gradlew test
     """.trimIndent(),
+)
+
+private val SHARED_ENV_KEYS = setOf(
+    "LLM_PROVIDER",
+    "LLM_API_KEY",
+    "DASHSCOPE_API_KEY",
+    "LLM_API_URL",
+    "LLM_MODEL",
+    "OLLAMA_URL",
+    "OLLAMA_EMBEDDING_MODEL",
+    "OLLAMA_CHAT_MODEL",
 )
