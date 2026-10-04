@@ -29,6 +29,10 @@ data class StoredChatMessage(
     val sources: List<GroundedSource> = emptyList(),
     val quotes: List<VerifiedQuote> = emptyList(),
     val needsClarification: Boolean = false,
+    val abstentionReason: String? = null,
+    val searchQuery: String? = null,
+    val validationErrors: List<String> = emptyList(),
+    val generationAttempts: Int = 0,
     val createdAt: String,
 )
 

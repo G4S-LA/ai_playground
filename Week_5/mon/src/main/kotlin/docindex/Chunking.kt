@@ -55,7 +55,7 @@ class StructuredChunker(
         }
         val result = mutableListOf<ChunkDraft>()
         sections.forEach { section ->
-            splitSection(section).forEach { part ->
+            splitSection(section, document.text).forEach { part ->
                 addChunk(
                     target = result,
                     document = document,
@@ -130,19 +130,34 @@ class StructuredChunker(
         return sections
     }
 
-    private fun splitSection(section: TextSection): List<IntRange> {
+    private fun splitSection(section: TextSection, documentText: String): List<IntRange> {
         if (section.end - section.start <= maxChunkSize) {
             return listOf(section.start until section.end)
         }
         val result = mutableListOf<IntRange>()
         var start = section.start
         while (start < section.end) {
-            val end = min(start + maxChunkSize, section.end)
+            val hardEnd = min(start + maxChunkSize, section.end)
+            val end = if (hardEnd == section.end) section.end else {
+                findSplitBoundary(documentText, start, hardEnd)
+            }
             result += start until end
             if (end == section.end) break
-            start = max(start + 1, end - fallbackOverlap)
+            start = wordStartAtOrAfter(documentText, max(start + 1, end - fallbackOverlap), end)
         }
         return result
+    }
+
+    private fun findSplitBoundary(text: String, start: Int, hardEnd: Int): Int {
+        val earliest = start + maxChunkSize / 2
+        return (hardEnd downTo earliest).firstOrNull { text[it].isWhitespace() } ?: hardEnd
+    }
+
+    private fun wordStartAtOrAfter(text: String, target: Int, end: Int): Int {
+        var position = target
+        while (position < end && !text[position].isWhitespace()) position++
+        while (position < end && text[position].isWhitespace()) position++
+        return position.coerceAtMost(end)
     }
 
     private data class TextSection(val name: String, val start: Int, val end: Int)

@@ -70,22 +70,37 @@ function renderMemory(memory) {
 function evidenceHtml(message) {
     const sources = message.sources || [];
     const quotes = message.quotes || [];
+    const validationFailed = message.abstentionReason === "validation_failed";
     const sourceItems = sources.length ? sources.map(source => `
         <article class="source">
             <header><span class="badge">${escapeHtml(source.citation)}</span><strong>${escapeHtml(source.source)}</strong></header>
             <p>${escapeHtml(source.section)} · ${escapeHtml(source.chunk_id)}</p>
-        </article>`).join("") : '<div class="source-empty">Релевантные источники не найдены.</div>';
+        </article>`).join("") : `<div class="source-empty">${validationFailed
+            ? "Источники не показаны: ответ модели не прошёл проверку подтверждений."
+            : "Релевантные источники не найдены."}</div>`;
     const quoteItems = quotes.length ? quotes.map(quote => `
         <article class="quote">
             <span class="badge">${escapeHtml(quote.citation)}</span>
             <blockquote>${escapeHtml(quote.quote)}</blockquote>
-        </article>`).join("") : '<div class="source-empty">Для ответа «не знаю» цитаты отсутствуют.</div>';
+        </article>`).join("") : `<div class="source-empty">${validationFailed
+            ? "Непроверенные цитаты модели были отклонены."
+            : "Для ответа «не знаю» цитаты отсутствуют."}</div>`;
     return `<details class="evidence" ${sources.length ? "open" : ""}>
         <summary>Источники · ${sources.length} / Цитаты · ${quotes.length}</summary>
         <div class="evidence-body">
             <section><h4>Sources</h4>${sourceItems}</section>
             <section><h4>Exact quotes</h4>${quoteItems}</section>
         </div>
+    </details>`;
+}
+
+function diagnosticsHtml(message) {
+    if (!message.validationErrors?.length) return "";
+    return `<details class="diagnostics" open>
+        <summary>Почему ответ отклонён</summary>
+        <p><b>Search query:</b> ${escapeHtml(message.searchQuery || "—")}</p>
+        <p><b>Попыток генерации:</b> ${escapeHtml(message.generationAttempts)}</p>
+        <ul>${message.validationErrors.map(error => `<li>${escapeHtml(error)}</li>`).join("")}</ul>
     </details>`;
 }
 
@@ -100,6 +115,7 @@ function renderMessages(messages) {
             <div class="message-label">${assistant ? "Assistant" : "You"}</div>
             <div class="bubble">${escapeHtml(message.content)}</div>
             ${assistant ? evidenceHtml(message) : ""}
+            ${assistant ? diagnosticsHtml(message) : ""}
         </article>`;
     }).join("");
     elements.messages.scrollTop = elements.messages.scrollHeight;

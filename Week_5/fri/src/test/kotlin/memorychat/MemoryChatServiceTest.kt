@@ -1,6 +1,7 @@
 package memorychat
 
 import enhancedrag.RetrievalSettings
+import groundedrag.AbstentionReason
 import groundedrag.AnswerValidation
 import groundedrag.GroundedAnswer
 import groundedrag.GroundedSource
@@ -66,6 +67,37 @@ class MemoryChatServiceTest {
         assertEquals("состояние текущей задачи", snapshot.memory.terms.single().meaning)
         assertTrue("Только локальные embeddings" in capturedQuestions.last())
         assertTrue(snapshot.messages.filter { it.role == "assistant" }.all { it.sources.single().chunkId == "chunk-1" })
+    }
+
+    @Test
+    fun `stores validation failure diagnostics instead of unverified source`() = runBlocking {
+        var id = 0
+        val service = MemoryChatService(
+            memoryPlanner = TaskMemoryPlanner { previous, _, current ->
+                MemoryPlan(previous.copy(goal = "Проверить ответ", revision = previous.revision + 1), current)
+            },
+            answerer = GroundedAnswerer { question, settings ->
+                groundedAnswer(question, settings).copy(
+                    answer = "Не знаю: ответ не прошёл проверку.",
+                    sources = emptyList(),
+                    quotes = emptyList(),
+                    needsClarification = true,
+                    validation = AnswerValidation(false, listOf("Цитата отсутствует в чанке."), 2, false),
+                    abstentionReason = AbstentionReason.VALIDATION_FAILED,
+                )
+            },
+            idFactory = { "id-${++id}" },
+            now = { "2026-10-04T12:00:00Z" },
+        )
+
+        val chat = service.create()
+        val reply = service.send(chat.id, "Что известно?")
+
+        assertEquals("validation_failed", reply.message.abstentionReason)
+        assertEquals("RAG", reply.message.searchQuery)
+        assertEquals(2, reply.message.generationAttempts)
+        assertEquals(listOf("Цитата отсутствует в чанке."), reply.message.validationErrors)
+        assertTrue(reply.message.sources.isEmpty())
     }
 
     private fun service(

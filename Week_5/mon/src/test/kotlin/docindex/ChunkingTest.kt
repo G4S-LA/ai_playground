@@ -65,4 +65,16 @@ class ChunkingTest {
 
         assertEquals(listOf("Файл и импорты", "class Greeter", "fun main"), chunks.map { it.section })
     }
+
+    @Test
+    fun `structured chunker does not start oversized parts in the middle of a word`() {
+        val text = "# Большой раздел\n\n" + (1..180).joinToString(" ") { "термин$it" }
+        val document = SourceDocument("book.md", "Book", ContentType.MARKDOWN, text)
+
+        val chunks = StructuredChunker(maxChunkSize = 300, fallbackOverlap = 60).chunk(document)
+
+        assertTrue(chunks.size > 1)
+        assertTrue(chunks.drop(1).all { document.text[it.startPosition - 1].isWhitespace() })
+        assertTrue(chunks.dropLast(1).all { document.text[it.endPosition].isWhitespace() })
+    }
 }

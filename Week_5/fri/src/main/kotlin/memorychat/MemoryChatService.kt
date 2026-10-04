@@ -64,6 +64,10 @@ class MemoryChatService(
                 sources = grounded.sources,
                 quotes = grounded.quotes,
                 needsClarification = grounded.needsClarification,
+                abstentionReason = grounded.abstentionReason?.wireName,
+                searchQuery = grounded.searchQuery,
+                validationErrors = grounded.validation.errors,
+                generationAttempts = grounded.validation.attempts,
                 createdAt = timestamp,
             )
             record.memory = plan.memory

@@ -35,7 +35,7 @@ class GroundedRagService(
         require(hits.isNotEmpty()) { "Structured-индекс пуст. Сначала постройте индекс документов." }
         val candidates = relevance.enhanced(
             hits = hits,
-            question = question,
+            question = rewrite.query,
             threshold = settings.similarityThreshold,
             finalK = settings.finalK,
         )
@@ -74,11 +74,10 @@ class GroundedRagService(
                 lastErrors = validation.errors
             }
         }
-        return fallback(
+        return validationFailed(
             question,
             rewrite.query,
             candidates,
-            selected.first(),
             settings,
             rewrite.elapsedMs,
             started.elapsedNow().inWholeMilliseconds,
@@ -171,48 +170,42 @@ class GroundedRagService(
         validation = AnswerValidation(true, emptyList(), attempts = 0, usedFallback = false),
         rewriteMs = rewriteMs,
         elapsedMs = elapsedMs,
+        abstentionReason = AbstentionReason.LOW_RELEVANCE,
     )
 
-    private fun fallback(
+    private fun validationFailed(
         question: String,
         query: String,
         candidates: List<enhancedrag.RankedChunk>,
-        source: enhancedrag.RankedChunk,
         settings: RetrievalSettings,
         rewriteMs: Long,
         elapsedMs: Long,
         errors: List<String>,
     ): GroundedAnswer {
-        val quote = exactExcerpt(source.text)
         return GroundedAnswer(
             question = question,
             searchQuery = query,
-            answer = "По найденному источнику: «$quote» [S1].",
-            sources = listOf(
-                GroundedSource("S1", source.source, source.section, source.chunkId, source.similarity, source.rerankScore),
-            ),
-            quotes = listOf(VerifiedQuote("S1", quote)),
+            answer = VALIDATION_FAILED_ANSWER,
+            sources = emptyList(),
+            quotes = emptyList(),
             candidates = candidates,
             settings = settings,
-            needsClarification = false,
-            clarificationPrompt = null,
-            validation = AnswerValidation(true, errors, attempts = MAX_ATTEMPTS, usedFallback = true),
+            needsClarification = true,
+            clarificationPrompt = VALIDATION_CLARIFICATION,
+            validation = AnswerValidation(false, errors, attempts = MAX_ATTEMPTS, usedFallback = false),
             rewriteMs = rewriteMs,
             elapsedMs = elapsedMs,
+            abstentionReason = AbstentionReason.VALIDATION_FAILED,
         )
-    }
-
-    private fun exactExcerpt(text: String): String {
-        val sentence = text.split(Regex("(?<=[.!?])\\s+"))
-            .map(String::trim)
-            .firstOrNull { it.length in 40..360 }
-        return sentence ?: text.trim().take(360)
     }
 
     private companion object {
         const val MAX_ATTEMPTS = 2
         const val CLARIFICATION = "Уточните формулировку вопроса или укажите, в каком разделе базы знаний искать ответ."
         const val UNKNOWN_ANSWER = "Не знаю: в базе знаний нет достаточно релевантной информации. $CLARIFICATION"
+        const val VALIDATION_CLARIFICATION = "Переформулируйте вопрос или уточните, какую часть темы нужно найти в базе знаний."
+        const val VALIDATION_FAILED_ANSWER =
+            "Не знаю: модель не смогла сформировать ответ, который подтверждается найденными источниками. $VALIDATION_CLARIFICATION"
         val SYSTEM_PROMPT = """
             Отвечай на русском языке только по предоставленным источникам.
             Верни строго один JSON-объект с полями answer, sources и quotes.

@@ -55,7 +55,7 @@ class GroundedRagServiceTest {
     }
 
     @Test
-    fun `uses exact safe fallback after two invalid model responses`() = runBlocking {
+    fun `returns honest unknown after two invalid model responses`() = runBlocking {
         val model = QueueModel(
             """{"answer":null,"sources":null,"quotes":{}}""",
             "still not json",
@@ -65,11 +65,30 @@ class GroundedRagServiceTest {
 
         val result = service.answer("Как работает RAG?", settings(threshold = -1.0))
 
-        assertTrue(result.validation.usedFallback)
+        assertTrue(result.needsClarification)
+        assertFalse(result.validation.valid)
+        assertFalse(result.validation.usedFallback)
         assertEquals(2, result.validation.attempts)
         assertEquals(2, model.calls)
-        assertTrue(result.quotes.single().quote in documentText())
-        assertTrue("[S1]" in result.answer)
+        assertEquals(AbstentionReason.VALIDATION_FAILED, result.abstentionReason)
+        assertTrue(result.sources.isEmpty())
+        assertTrue(result.quotes.isEmpty())
+        assertTrue(result.answer.startsWith("Не знаю:"))
+        assertTrue(result.validation.errors.isNotEmpty())
+    }
+
+    @Test
+    fun `reranks candidates using rewritten query instead of raw dialogue context`() = runBlocking {
+        val service = service(ValidGroundedModel())
+        service.rebuildStructuredIndex()
+
+        val result = service.answer(
+            "KV Cache повторно использует позиции токенов.",
+            settings(threshold = -1.0),
+        )
+
+        assertTrue(result.candidates.first { it.selected }.lexicalScore > 0.0)
+        assertEquals("RAG релевантные фрагменты контекст", result.searchQuery)
     }
 
     private fun service(model: ChatLanguageModel): GroundedRagService {

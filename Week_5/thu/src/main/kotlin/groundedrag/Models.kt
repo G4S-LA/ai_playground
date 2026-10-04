@@ -27,6 +27,14 @@ data class AnswerValidation(
     val usedFallback: Boolean,
 )
 
+enum class AbstentionReason(val wireName: String) {
+    @SerializedName("low_relevance")
+    LOW_RELEVANCE("low_relevance"),
+
+    @SerializedName("validation_failed")
+    VALIDATION_FAILED("validation_failed"),
+}
+
 data class GroundedAnswer(
     val question: String,
     val searchQuery: String,
@@ -40,6 +48,7 @@ data class GroundedAnswer(
     val validation: AnswerValidation,
     val rewriteMs: Long,
     val elapsedMs: Long,
+    val abstentionReason: AbstentionReason? = null,
 )
 
 data class ModelQuote(

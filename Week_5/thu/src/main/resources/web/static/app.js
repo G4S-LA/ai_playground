@@ -87,6 +87,7 @@ function renderQuote(quote) {
 
 function renderAnswer(result) {
     const unknown = result.needsClarification;
+    const validationFailed = result.abstentionReason === "validation_failed";
     const validation = result.validation;
     const errors = validation.errors?.length ? validation.errors.join("\n") : "Ошибок нет.";
     const sourceHtml = result.sources.length ? result.sources.map(renderSource).join("") : "<p>Источники отсутствуют.</p>";
@@ -95,14 +96,14 @@ function renderAnswer(result) {
     elements.result.innerHTML = `
         <header class="answer-head">
             <span class="answer-state">${unknown ? "не знаю" : "подтверждено"}</span>
-            <h3>${unknown ? "Недостаточно контекста" : "Ответ по базе знаний"}</h3>
+            <h3>${unknown ? (validationFailed ? "Ответ не прошёл проверку" : "Недостаточно контекста") : "Ответ по базе знаний"}</h3>
             <time>${result.elapsedMs} ms · rewrite ${result.rewriteMs} ms</time>
         </header>
         <div class="validation">
             <div><i>${result.sources.length ? "✓" : "—"}</i> Источники: ${result.sources.length}</div>
             <div><i>${result.quotes.length ? "✓" : "—"}</i> Цитаты: ${result.quotes.length}</div>
             <div><i>${validation.valid ? "✓" : "×"}</i> Формат проверен</div>
-            <div><i>${validation.usedFallback ? "↻" : "✓"}</i> ${validation.usedFallback ? "Safe fallback" : `Попыток: ${validation.attempts}`}</div>
+            <div><i>${validation.valid ? "✓" : "×"}</i> ${validation.valid ? `Попыток: ${validation.attempts}` : "Ответ отклонён"}</div>
         </div>
         <div class="answer-text">${escapeHtml(result.answer)}</div>
         ${unknown ? `<p class="clarification">${escapeHtml(result.clarificationPrompt)}</p>` : `
