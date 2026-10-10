@@ -48,7 +48,11 @@ class WebTest {
         )
         application { localRagModule(service, config) }
 
-        assertEquals(HttpStatusCode.OK, client.get("/").status)
+        val page = client.get("/")
+        assertEquals(HttpStatusCode.OK, page.status)
+        val html = page.bodyAsText()
+        assertTrue(html.contains("<title>Local RAG · Answers under evidence</title>"))
+        assertTrue(html.contains("Спросить у локального RAG"))
         val info = JsonParser.parseString(client.get("/api/info").bodyAsText()).asJsonObject
         assertTrue(info.getAsJsonObject("status").get("reachable").asBoolean)
         assertTrue(info.get("chatModelInstalled").asBoolean)

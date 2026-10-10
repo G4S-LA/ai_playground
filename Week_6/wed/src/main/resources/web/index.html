@@ -1,100 +1,83 @@
 <!doctype html>
 <html lang="ru">
-  <head>
+<head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Полностью локальный RAG на Ollama и SQLite">
-    <title>Local RAG · Ollama + SQLite</title>
+    <title>Local RAG · Answers under evidence</title>
     <link rel="stylesheet" href="/static/styles.css">
-  </head>
-  <body>
-    <main class="shell">
-      <header class="hero">
+</head>
+<body>
+<main class="shell">
+    <header class="hero">
         <div>
-          <p class="eyebrow">Retrieval augmented generation</p>
-          <h1>Ваши документы.<br><em>Локальный ответ.</em></h1>
-          <p class="lead">Поиск в SQLite и генерация через Ollama — без облачной модели и передачи контекста наружу.</p>
+            <p class="eyebrow">Local · retrieval augmented generation</p>
+            <h1>Answers<br><em>under evidence.</em></h1>
+            <p class="lead">Один вопрос. Локальный retrieval по SQLite. Ответ локальной Ollama, заземлённый в вашей базе знаний.</p>
         </div>
-        <section class="runtime" aria-label="Состояние Ollama">
-          <div class="runtime__heading">
-            <span id="status-dot" class="status-dot"></span>
-            <strong id="status-title">Проверяем Ollama…</strong>
-          </div>
-          <dl>
-            <div><dt>Embeddings</dt><dd id="embedding-model">—</dd></div>
-            <div><dt>Generation</dt><dd id="chat-model">—</dd></div>
-            <div><dt>Endpoint</dt><dd id="ollama-url">127.0.0.1</dd></div>
-          </dl>
-        </section>
-      </header>
-
-      <section class="pipeline" aria-label="Локальный RAG pipeline">
-        <article>
-          <span>01</span>
-          <div><strong>Retrieval</strong><small>векторный поиск в SQLite</small></div>
-        </article>
-        <i aria-hidden="true">→</i>
-        <article>
-          <span>02</span>
-          <div><strong>Context</strong><small>чанки с метаданными</small></div>
-        </article>
-        <i aria-hidden="true">→</i>
-        <article>
-          <span>03</span>
-          <div><strong>Generation</strong><small>локальная Ollama</small></div>
-        </article>
-      </section>
-
-      <section class="workspace">
-        <section class="ask-panel panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">Вопрос к базе знаний</p>
-              <h2>Найти доказательства</h2>
-            </div>
-            <label>Top K
-              <input id="top-k" type="number" min="1" max="12" value="5">
-            </label>
-          </div>
-
-          <form id="ask-form" class="ask-form">
-            <label class="visually-hidden" for="question">Вопрос</label>
-            <textarea id="question" rows="4" maxlength="2000" placeholder="Например: из каких этапов состоит RAG-пайплайн?" required></textarea>
-            <button id="ask-button" class="primary-button" type="submit">
-              <span>Получить ответ</span><b aria-hidden="true">↗</b>
-            </button>
-          </form>
-
-          <div class="privacy-note">
-            <span aria-hidden="true">⌂</span>
-            <p><strong>Local only.</strong> Запрос, найденные фрагменты и ответ остаются на этом компьютере.</p>
-          </div>
-        </section>
-
-        <aside class="index-panel panel">
-          <div class="panel-heading">
-            <div><p class="eyebrow">Structured index</p><h2>Индекс</h2></div>
-            <button id="refresh" class="icon-button" type="button" title="Обновить">↻</button>
-          </div>
-          <div class="index-stats">
-            <div><strong id="chunk-count">—</strong><span>чанков</span></div>
-            <div><strong id="document-count">—</strong><span>документов</span></div>
-          </div>
-          <button id="rebuild" class="secondary-button" type="button">Перестроить индекс</button>
-          <p class="microcopy">Перестройка нужна после изменения корпуса или embedding-модели.</p>
-        </aside>
-      </section>
-
-      <section id="result" class="result panel result--empty" aria-live="polite">
-        <div class="empty-state">
-          <span>⌕</span>
-          <h2>Ответ появится здесь</h2>
-          <p>Сначала локальный retrieval выберет релевантные чанки, затем Ollama сформирует ответ со ссылками на источники.</p>
+        <div id="model-card" class="model-card">
+            <span id="runtime-state">Runtime · проверяем Ollama</span>
+            <strong id="chat-model">подключение…</strong>
+            <small id="embedding-model"></small>
         </div>
-      </section>
-    </main>
+    </header>
 
-    <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="/static/app.js"></script>
-  </body>
+    <section class="status-strip">
+        <div><span>Structured index</span><strong id="chunk-count">—</strong><small>чанков</small></div>
+        <div><span>Documents</span><strong id="document-count">—</strong><small>источников</small></div>
+        <div><span>Local models</span><strong id="model-count">—</strong><small>готовы в Ollama</small></div>
+        <button id="rebuild" class="quiet-button" type="button">Перестроить индекс ↗</button>
+    </section>
+
+    <section class="ask-panel panel">
+        <div class="panel-heading">
+            <div><p class="eyebrow">Grounded answer</p><h2>Спросить у локального RAG</h2></div>
+            <label>Top K <input id="top-k" type="number" min="1" max="12" value="5"></label>
+        </div>
+        <div class="ask-row">
+            <textarea id="question" rows="3" maxlength="2000" placeholder="Например: из каких этапов состоит RAG-пайплайн?"></textarea>
+            <button id="ask" class="primary-button" type="button">Получить<br>RAG-ответ</button>
+        </div>
+        <div id="comparison" class="comparison empty">
+            <div class="empty-copy">Задайте вопрос — retrieval покажет источники, а локальная модель ответит только по ним.</div>
+        </div>
+    </section>
+
+    <section class="evaluation panel">
+        <div class="panel-heading">
+            <div><p class="eyebrow">Local-only pipeline</p><h2>Как проходит запрос</h2></div>
+        </div>
+        <p class="note">Запрос, найденные фрагменты и сгенерированный ответ остаются на этом компьютере. Облачные модели и API-ключи не используются.</p>
+        <div class="questions">
+            <article class="question-card flow-card">
+                <div class="question-number">01</div>
+                <div class="question-body">
+                    <h3>Query embedding</h3>
+                    <p><span>Модель</span><b id="flow-embedding">bge-m3</b></p>
+                    <p><span>Где</span>локальная Ollama · <code>/api/embed</code></p>
+                </div>
+            </article>
+            <article class="question-card flow-card">
+                <div class="question-number">02</div>
+                <div class="question-body">
+                    <h3>Vector retrieval</h3>
+                    <p><span>Хранилище</span>SQLite structured index</p>
+                    <p><span>Поиск</span>локальный cosine similarity</p>
+                </div>
+            </article>
+            <article class="question-card flow-card">
+                <div class="question-number">03</div>
+                <div class="question-body">
+                    <h3>Grounded generation</h3>
+                    <p><span>Модель</span><b id="flow-chat">qwen2.5:3b</b></p>
+                    <p><span>Где</span>локальная Ollama · <code>/api/chat</code></p>
+                </div>
+            </article>
+        </div>
+    </section>
+</main>
+
+<div id="toast" class="toast" aria-live="polite"></div>
+<script src="/static/app.js"></script>
+</body>
 </html>
