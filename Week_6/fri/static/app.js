@@ -200,7 +200,7 @@ async function updateHealth() {
     const health = await response.json();
     statusElement.className = `status ${health.ready ? "ok" : "error"}`;
     statusElement.textContent = health.ready ? "Модель готова" : "Ollama не готова";
-    modelInfoElement.textContent = `${health.model} · диалоги сохраняются в ${health.storage}`;
+    modelInfoElement.textContent = `${health.model} · история сохраняется`;
   } catch (error) {
     statusElement.className = "status error";
     statusElement.textContent = "Сервис недоступен";
