@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Локальный чат с Ollama и сохраняемыми диалогами">
+    <title>Local Chat · Ollama</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <main class="workspace">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand__mark" aria-hidden="true">L</span>
+          <div>
+            <p class="eyebrow">Неделя 6 · Понедельник</p>
+            <h1>Local Chat</h1>
+          </div>
+        </div>
+
+        <button id="new-chat" class="new-chat-button" type="button">
+          <span aria-hidden="true">＋</span> Новый диалог
+        </button>
+
+        <div class="list-heading">
+          <span>Диалоги</span>
+          <span id="chat-count" class="count">0</span>
+        </div>
+        <nav id="chat-list" class="chat-list" aria-label="Сохранённые диалоги"></nav>
+
+        <section class="local-card" aria-label="Состояние локальной модели">
+          <span id="status-dot" class="status-dot"></span>
+          <div>
+            <strong id="status-title">Проверяем Ollama…</strong>
+            <span id="status-details">127.0.0.1</span>
+          </div>
+          <button id="refresh-status" type="button" aria-label="Обновить состояние" title="Обновить">↻</button>
+        </section>
+      </aside>
+
+      <section class="chat-pane">
+        <header class="chat-header">
+          <div class="chat-heading">
+            <p class="eyebrow eyebrow--dark">Локальная модель</p>
+            <h2 id="chat-title">Загрузка…</h2>
+            <p id="model-name" class="model-name">Ollama</p>
+          </div>
+          <button id="delete-chat" class="delete-button" type="button">
+            <span aria-hidden="true">⌫</span> Удалить
+          </button>
+        </header>
+
+        <section id="messages" class="messages" aria-live="polite" aria-label="Сообщения"></section>
+
+        <form id="chat-form" class="composer">
+          <label class="visually-hidden" for="message-input">Сообщение локальной модели</label>
+          <textarea
+            id="message-input"
+            rows="2"
+            maxlength="4000"
+            placeholder="Напишите сообщение локальной модели…"
+            required
+          ></textarea>
+          <button id="send-button" class="send-button" type="submit" aria-label="Отправить">
+            <span>Отправить</span><b aria-hidden="true">↑</b>
+          </button>
+        </form>
+        <p class="hint">Enter — отправить · Shift+Enter — новая строка · история хранится в SQLite</p>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
