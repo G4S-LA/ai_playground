@@ -1,0 +1,5 @@
+#!/bin/sh
+
+# Reuse the Gradle wrapper already committed in the training repository.
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "$SCRIPT_DIR/../../Week_3/thu/gradlew" -p "$SCRIPT_DIR" "$@"

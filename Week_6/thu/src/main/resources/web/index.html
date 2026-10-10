@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Сравнение baseline и оптимизированного запроса к одной локальной LLM">
+    <title>Local LLM · Same model, better behavior</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<main class="shell">
+    <header class="hero">
+        <div>
+            <p class="eyebrow">Local · model optimization</p>
+            <h1>Same model.<br><em>Better behavior.</em></h1>
+            <p class="lead">Один и тот же запрос, одна и та же локальная модель — но разные параметры и prompt-шаблоны. Сравнение выполняется последовательно, без конкуренции за ресурсы.</p>
+        </div>
+        <div id="model-card" class="model-card">
+            <span id="runtime-state">Runtime · проверяем Ollama</span>
+            <strong id="model-name">подключение…</strong>
+            <small id="model-details">локальная модель</small>
+        </div>
+    </header>
+
+    <section class="status-strip" aria-label="Характеристики эксперимента">
+        <div><span>Quantization</span><strong id="quantization">—</strong><small>фактическая</small></div>
+        <div><span>Model size</span><strong id="model-size">—</strong><small>на диске</small></div>
+        <div><span>Execution</span><strong>1 → 2</strong><small>последовательно</small></div>
+    </section>
+
+    <section class="profiles panel">
+        <div class="panel-heading">
+            <div><p class="eyebrow">Controlled experiment</p><h2>Что именно меняется</h2></div>
+        </div>
+        <div class="profile-grid">
+            <article class="profile baseline-profile">
+                <div class="profile-title"><span>01</span><h3>До оптимизации</h3></div>
+                <dl>
+                    <div><dt>Temperature</dt><dd id="baseline-temperature">—</dd></div>
+                    <div><dt>Max tokens</dt><dd id="baseline-tokens">—</dd></div>
+                    <div><dt>Context</dt><dd id="baseline-context">—</dd></div>
+                    <div><dt>Prompt</dt><dd>без system prompt</dd></div>
+                </dl>
+            </article>
+            <article class="profile optimized-profile">
+                <div class="profile-title"><span>02</span><h3>После оптимизации</h3></div>
+                <dl>
+                    <div><dt>Temperature</dt><dd id="optimized-temperature">—</dd></div>
+                    <div><dt>Max tokens</dt><dd id="optimized-tokens">—</dd></div>
+                    <div><dt>Context</dt><dd id="optimized-context">—</dd></div>
+                    <div><dt>Prompt</dt><dd>строгий шаблон ответа</dd></div>
+                </dl>
+            </article>
+        </div>
+    </section>
+
+    <section class="ask-panel panel">
+        <div class="panel-heading">
+            <div><p class="eyebrow">A/B comparison</p><h2>Один запрос — два ответа</h2></div>
+            <span class="sequence-note">Порядок чередуется между запусками</span>
+        </div>
+        <div class="examples" aria-label="Примеры запросов">
+            <button type="button">Объясни разницу между процессом и потоком</button>
+            <button type="button">Как безопасно хранить API-ключи?</button>
+            <button type="button">Составь план изучения Kotlin Coroutines</button>
+        </div>
+        <div class="ask-row">
+            <label class="visually-hidden" for="prompt">Запрос</label>
+            <textarea id="prompt" rows="3" maxlength="4000" placeholder="Введите технический вопрос для локальной модели…"></textarea>
+            <button id="compare" class="primary-button" type="button">Сравнить<br>ответы</button>
+        </div>
+        <div id="comparison" class="comparison empty" aria-live="polite">
+            <div class="empty-copy">Результаты появятся рядом: качество ответа, скорость генерации и потребление ресурсов.</div>
+        </div>
+    </section>
+
+</main>
+
+<div id="toast" class="toast" aria-live="polite"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
