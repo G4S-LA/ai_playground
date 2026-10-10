@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Локальный чат</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <p class="eyebrow">LOCAL · PRIVATE · OLLAMA</p>
+        <h1>Локальный чат</h1>
+      </div>
+      <div id="status" class="status pending">Проверяю модель…</div>
+    </header>
+
+    <section class="access" aria-label="Доступ">
+      <label for="api-key">API-ключ</label>
+      <input id="api-key" type="password" autocomplete="off" placeholder="SERVICE_API_KEY из .env">
+      <button id="save-key" type="button" class="secondary">Подключиться</button>
+      <span id="model-info" class="muted"></span>
+    </section>
+
+    <section class="workspace">
+      <aside class="sidebar">
+        <button id="new-chat" type="button" class="new-chat">+ Новый диалог</button>
+        <div id="chat-list" class="chat-list" aria-label="Диалоги"></div>
+      </aside>
+
+      <div class="chat-panel">
+        <div class="chat-heading">
+          <h2 id="chat-title">Выберите диалог</h2>
+          <button id="delete-chat" type="button" class="danger" disabled>Удалить</button>
+        </div>
+
+        <section id="messages" class="messages" aria-live="polite">
+          <div class="empty-state">
+            <p>Создайте новый диалог, чтобы начать общение.</p>
+            <p class="muted">Сообщения сохраняются в SQLite и останутся после перезапуска.</p>
+          </div>
+        </section>
+
+        <form id="chat-form" class="composer">
+          <label class="sr-only" for="prompt">Сообщение</label>
+          <textarea id="prompt" rows="3" placeholder="Напишите сообщение…" disabled required></textarea>
+          <div class="actions">
+            <span id="counter" class="muted">0 символов</span>
+            <button id="send" type="submit" disabled>Отправить</button>
+          </div>
+          <p class="hint">⌘/Ctrl + Enter — отправить.</p>
+        </form>
+      </div>
+    </section>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>
